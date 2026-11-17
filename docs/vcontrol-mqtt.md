@@ -134,6 +134,8 @@ vcontrol-mqtt --config /etc/vcontrol/vcontrol-mqtt.toml --read-only
 | `--config <path>` | Path of the configuration file. Required. |
 | `--read-only` | Never write to the controller. A valid write is logged as "would write". |
 
+For the very first runs on a controller, follow the checklist in [`vcontrol-mqtt-real-device-test.md`](vcontrol-mqtt-real-device-test.md).
+
 When the values look right, run it as a service:
 
 ```sh

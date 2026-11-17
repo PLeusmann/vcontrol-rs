@@ -232,7 +232,7 @@ Both are decided:
 | 5 | MQTT end to end: retained state, `/set` round trip, resubscribe after reconnect, Last Will, offline on shutdown, Discovery re-publish, nothing lost while reads are always due, TLS with username/password | Fake `Controller` + mosquitto in the devcontainer |
 | 6 | `Command::set` no longer panics | Library unit test, then the fix |
 | 6a | The real binary: startup order, exit codes 0/1/2, a write through the real `VControl`, `--read-only`, SIGTERM, a controller that stops answering | `tests/vcontrol_mqtt.rs`: fake controller speaking VS1 or VS2 over TCP + mosquitto, once for each protocol |
-| 7 | Real controller | On the Pi, first with `--read-only`, then live |
+| 7 | Real controller | On the Pi, first with `--read-only`, then live. The checklist is [`vcontrol-mqtt-real-device-test.md`](vcontrol-mqtt-real-device-test.md). Not done yet; it also measures the connect and read times against the 20 s and 5 s timeouts. |
 
 All tests run with `cargo test --features mqtt` inside the devcontainer.
 
