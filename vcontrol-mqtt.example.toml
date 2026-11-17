@@ -1,0 +1,35 @@
+# Example configuration for vcontrol-mqtt. Copy to /etc/vcontrol/vcontrol-mqtt.toml.
+# Command names are those of `vcontrol cat`; they depend on the detected controller.
+
+poll_interval = 60             # seconds, for every Command without its own `interval`
+
+# Commands that accept writes on `<topic_prefix>/<command>/set`. Each must also be a [[command]] below.
+# Start with `--read-only`: writes are then validated and logged, but not sent to the controller.
+# Top-level keys must come before the first table.
+writable = ["Bedien_WW_Solltemperatur"]
+
+[optolink]
+device = "/dev/ttyUSB0"        # or: host = "...", port = 1234
+
+[mqtt]
+host = "broker.local"
+port = 8883                    # default: 1883
+client_id = "vcontrol"         # also used in discovery ids, so must be unique per controller
+username = "vcontrol"
+password = "..."               # the environment variable VCONTROL_MQTT_PASSWORD overrides this
+tls = true
+ca_file = "/etc/vcontrol/ca.pem"   # required when tls = true
+topic_prefix = "vcontrol"
+
+[homeassistant]
+discovery_prefix = "homeassistant"
+
+[[command]]
+name = "ADC_Isttemperaturwert_KTS"
+
+[[command]]
+name = "Bedien_WW_Solltemperatur"
+
+[[command]]
+name = "K0E_KonfiTSAReglerverstaerkung"
+interval = 3600                # optional, seconds

@@ -30,6 +30,7 @@ cli = [
   "tokio/io-util",
 ]
 schemars = ["dep:schemars"]
+mqtt = ["cli", "dep:rumqttc", "dep:rustls", "dep:toml", "tokio/signal"]
 
 [dependencies]
 clap = { version = "4.6", optional = true }
@@ -47,10 +48,22 @@ tokio-serial = "5.5.0"
 pin-project = "1.1.13"
 num_enum = "0.7.6"
 serialport = { version = "4.10.1", default-features = false }
+# Pinned. rustls must use the `ring` backend: `aws-lc-rs` is hard to cross-compile for armv7 musl.
+rumqttc = { version = "=0.25.1", default-features = false, features = ["use-rustls-no-provider"], optional = true }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
+toml = { version = "1", optional = true }
 
 [[bin]]
 name = "vcontrol"
 required-features = ["cli"]
+
+[[bin]]
+name = "vcontrol-mqtt"
+required-features = ["mqtt"]
+
+[[test]]
+name = "vcontrol_mqtt"
+required-features = ["mqtt"]
 
 [build-dependencies]
 chrono = "0.4"
@@ -62,4 +75,5 @@ anyhow = "1.0.104"
 
 [dev-dependencies]
 serde_json = "1"
-tokio = { version = "1.54", features = ["rt"] }
+tokio = { version = "1.54", features = ["rt", "test-util"] }
+flume = "0.11"
