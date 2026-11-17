@@ -296,13 +296,20 @@ impl Command {
     self.deserialize(bytes)
   }
 
-  pub async fn set(&self, o: &mut Optolink, protocol: Protocol, mut input: Value) -> Result<(), Error> {
+  pub async fn set(&self, o: &mut Optolink, protocol: Protocol, input: Value) -> Result<(), Error> {
     log::trace!("Command::set(…)");
 
     if !self.mode.is_write() {
       return Err(Error::UnsupportedMode(format!("Address 0x{:04X} does not support writing.", self.addr)));
     }
 
+    let bytes = self.serialize(input)?;
+
+    protocol.set(o, self.addr, &bytes).await.map_err(Into::into)
+  }
+
+  /// Serializes the command value to the bytes `set` writes.
+  pub fn serialize(&self, mut input: Value) -> Result<Vec<u8>, Error> {
     match &input {
       Value::Int(n) => {
         if let Some(lower_bound) = self.lower_bound
@@ -334,7 +341,7 @@ impl Command {
     }
 
     if let Some(conversion) = &self.conversion {
-      input = input.convert_back(conversion).unwrap();
+      input = input.convert_back(conversion).map_err(|err| Error::InvalidArgument(err.to_string()))?;
     }
 
     if self.data_type == DataType::Int
@@ -358,14 +365,14 @@ impl Command {
       input = Value::Date(date);
     }
 
-    let bytes = match (self.data_type, input) {
+    Ok(match (self.data_type, input) {
       (DataType::Date, Value::Date(date)) => date.to_bytes().to_vec(),
       (DataType::DateTime, Value::DateTime(date_time)) => date_time.to_bytes().to_vec(),
       (DataType::CircuitTimes, Value::CircuitTimes(cycletimes)) => cycletimes.to_bytes().to_vec(),
       (DataType::ByteArray, Value::ByteArray(bytes)) => bytes.to_vec(),
       (DataType::String, Value::String(s)) => s.as_bytes().to_vec(),
       (DataType::Error, Value::Error(error)) => error.to_bytes().to_vec(),
-      (DataType::Int | DataType::Byte, Value::Int(n)) => match self.parameter {
+      (DataType::Int | DataType::Byte, Value::Int(n)) => match &self.parameter {
         Parameter::Byte => (n as u8).to_le_bytes().to_vec(),
         Parameter::Int => (n as u16).to_le_bytes().to_vec(),
         Parameter::IntHighByteFirst => (n as u16).to_be_bytes().to_vec(),
@@ -376,9 +383,11 @@ impl Command {
         Parameter::SIntHighByteFirst => (n as i16).to_be_bytes().to_vec(),
         Parameter::SInt4 => (n as i32).to_le_bytes().to_vec(),
         Parameter::SInt4HighByteFirst => (n as i32).to_be_bytes().to_vec(),
-        _ => unreachable!(),
+        parameter => {
+          return Err(Error::InvalidArgument(format!("cannot write {:?} as {:?}", self.data_type, parameter)));
+        },
       },
-      (DataType::Double, Value::Double(n)) => match self.parameter {
+      (DataType::Double, Value::Double(n)) => match &self.parameter {
         Parameter::Byte => (n as u8).to_le_bytes().to_vec(),
         Parameter::Int => (n as u16).to_le_bytes().to_vec(),
         Parameter::IntHighByteFirst => (n as u16).to_be_bytes().to_vec(),
@@ -389,12 +398,12 @@ impl Command {
         Parameter::SIntHighByteFirst => (n as i16).to_be_bytes().to_vec(),
         Parameter::SInt4 => (n as i32).to_le_bytes().to_vec(),
         Parameter::SInt4HighByteFirst => (n as i32).to_be_bytes().to_vec(),
-        _ => unreachable!(),
+        parameter => {
+          return Err(Error::InvalidArgument(format!("cannot write {:?} as {:?}", self.data_type, parameter)));
+        },
       },
       (data_type, input) => return Err(Error::InvalidArgument(format!("expected {:?}, got {:?}", data_type, input))),
-    };
-
-    protocol.set(o, self.addr, &bytes).await.map_err(Into::into)
+    })
   }
 }
 
@@ -423,6 +432,29 @@ mod tests {
     };
     let value = command.parse_value(&[0x00, 0x95, 0xBA, 0x0A]).unwrap();
     assert_eq!(value, Value::Double(50000.0));
+  }
+
+  #[test]
+  fn serialize_irreversible_conversion_is_an_error() {
+    let command = Command {
+      addr: 0x0886,
+      mode: AccessMode::ReadWrite,
+      data_type: DataType::Double,
+      parameter: Parameter::Int,
+      block_count: None,
+      block_len: 4,
+      byte_len: 4,
+      byte_pos: 0,
+      bit_len: None,
+      bit_pos: 0,
+      conversion: Some(Conversion::SecToHour),
+      lower_bound: None,
+      upper_bound: None,
+      unit: Some("h"),
+      mapping: None,
+    };
+
+    assert!(matches!(command.serialize(Value::Double(1.0)), Err(Error::InvalidArgument(_))));
   }
 
   // `Ecotronic_0D00` specifies `RotateBytes` for `Int`, which doesn't seem to do anything.
