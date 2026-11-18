@@ -133,18 +133,19 @@ impl<C: Controller> Bridge<C> {
     self.schedule.all_due(Instant::now());
   }
 
-  /// Counts a controller call. `Err` when the Optolink link is lost, `Ok(None)` when only this call failed.
+  /// Counts a controller call, a timeout like any other failure. `Err` when the Optolink link is lost,
+  /// `Ok(None)` when only this call failed.
   fn check<T>(&mut self, command: &str, result: Result<T, Failure>) -> Result<Option<T>, Exit> {
     match result {
       Ok(value) => {
         self.failures.success();
         Ok(Some(value))
       },
-      Err(Failure::Timeout) => {
-        log::error!("{command}: timed out, the Optolink link is lost.");
-        Err(Exit::LinkLost)
-      },
-      Err(Failure::Error(err)) => {
+      Err(failure) => {
+        let err = match failure {
+          Failure::Timeout => "timed out".to_owned(),
+          Failure::Error(err) => err,
+        };
         log::warn!("{command}: {err}");
         if self.failures.failure(command) {
           log::error!("Too many consecutive failures, the Optolink link is lost.");
@@ -658,13 +659,26 @@ mod tests {
   }
 
   #[tokio::test(start_paused = true)]
-  async fn timeout_ends_the_bridge() {
+  async fn one_command_timing_out_does_not_end_the_bridge() {
     local(async {
       let bridge = Harness::start(false);
       bridge.fake.state().hanging.insert(SETPOINT.into());
+      sleep(Duration::from_secs(600)).await;
+      assert!(bridge.fake.gets(SETPOINT) > 1);
+      assert!(bridge.fake.gets(TEMPERATURE) > 1);
+      assert!(!bridge.task.is_finished());
+    })
+    .await
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn three_consecutive_timeouts_across_commands_end_the_bridge() {
+    local(async {
+      let bridge = Harness::start(false);
+      bridge.fake.state().hanging.extend([TEMPERATURE.to_owned(), SETPOINT.to_owned(), PRIORITY.to_owned()]);
       let start = Instant::now();
       assert_eq!(bridge.task.await.unwrap(), Exit::LinkLost);
-      assert_eq!(start.elapsed(), crate::controller::TIMEOUT);
+      assert_eq!(start.elapsed(), 3 * crate::controller::TIMEOUT);
     })
     .await
   }
@@ -802,7 +816,7 @@ mod tests {
   }
 
   #[tokio::test(start_paused = true)]
-  async fn hanging_write_ends_the_bridge() {
+  async fn hanging_write_does_not_end_the_bridge() {
     local(async {
       let bridge = Harness::start(false);
       bridge.send(connack());
@@ -810,7 +824,9 @@ mod tests {
 
       bridge.fake.state().hanging.insert(SETPOINT.into());
       bridge.send(message(&format!("vcontrol/{SETPOINT}/set"), "55"));
-      assert_eq!(bridge.task.await.unwrap(), Exit::LinkLost);
+      sleep(Duration::from_secs(600)).await;
+      assert!(bridge.fake.gets(TEMPERATURE) > 1);
+      assert!(!bridge.task.is_finished());
     })
     .await
   }

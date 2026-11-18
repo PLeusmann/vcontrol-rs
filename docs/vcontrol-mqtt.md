@@ -239,7 +239,7 @@ The program ends with an exit code that tells what happened:
 | Exit code | Meaning | What systemd does |
 |---|---|---|
 | 0 | Stopped by a signal. | nothing |
-| 1 | The connection to the controller could not be opened, or was lost. | restarts after 10 seconds |
+| 1 | The connection to the controller could not be opened, or was lost: three calls in a row failed or timed out, not all of them the same command. One command that fails or times out on its own is logged and skipped. | restarts after 10 seconds |
 | 2 | The configuration is wrong. | nothing; fix the file and start again |
 
 | Symptom | Cause and fix |

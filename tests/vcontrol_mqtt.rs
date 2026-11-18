@@ -154,8 +154,9 @@ fn bridge(config: &Path, read_only: bool) -> Killed {
   Killed(command.spawn().unwrap())
 }
 
+/// Waits up to 60 s: a controller that stops answering takes three failed calls (5 + 20 + 20 s) to end the bridge.
 async fn exit_code(child: &mut Killed) -> i32 {
-  for _ in 0..600 {
+  for _ in 0..1200 {
     if let Some(status) = child.0.try_wait().unwrap() {
       return status.code().expect("ended by its own exit");
     }

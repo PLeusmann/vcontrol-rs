@@ -7,7 +7,7 @@ use vcontrol::{Device, Optolink, VControl, Value};
 
 use crate::config::OptolinkConfig;
 
-/// A `get` or `set` that takes longer than this means the Optolink link is lost.
+/// A `get` or `set` that takes longer than this has failed.
 pub const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Connecting detects the protocol, which waits several times for the controller's sync byte (sent about every 2 s),
