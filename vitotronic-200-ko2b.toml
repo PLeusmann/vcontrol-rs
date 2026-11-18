@@ -1,0 +1,187 @@
+# vcontrol-mqtt for the Vitotronic 200 KO2B (V200KO2B) on heizomat, heating circuit 1 only.
+# Lives in ~/vcontrol-mqtt on heizomat; the broker password is in ~/vcontrol-mqtt/.env (VCONTROL_MQTT_PASSWORD).
+# Values: Obsidian note "Heizung vcontrol Werte".
+# Left out: coding addresses (Kxx, set by the installer), static ids, and complex types
+# (Uhrzeit, error list, holiday dates, device_id), which the bridge cannot poll.
+
+poll_interval = 60             # live values
+
+# Read-only: nothing is subscribed on `/set`, Home Assistant shows sensors only.
+writable = []
+
+# Prepared write channels: the settings a user changes at the controller. All are polled below and pass
+# the bridge's write checks. To enable, replace the line above; start with one entry and --read-only
+# (docs/vcontrol-mqtt-real-device-test.md, parts 4 and 5).
+# writable = [
+#   "Bedien_WW_Solltemperatur",             # Trinkwassertemperatur-Sollwert, 10..95 °C
+#   "BedienRTSolltemperaturA1M1",           # Raumtemperatur Soll, 3..37 °C
+#   "BedienRTSolltemperaturReduziertA1M1",  # Red. Raumtemp. Soll, 3..37 °C
+#   "BedienRTSoll_PartyA1M1",               # Party-Raumtemperatur Soll, 4..37 °C
+#   "BedienteilBA_GWGA1",                   # Betriebsprogramm
+#   "NRx_PartybetriebA1M1_D",               # Partybetrieb
+#   "NRx_SparbetriebA1M1_D",                # Sparbetrieb
+#   "KD3_KonfiNeigungA1",                   # Neigung Heizkennlinie, 0.2..3.5
+#   "KD4_KonfiNiveauA1",                    # Niveau Heizkennlinie, -13..40 K
+# ]
+
+[optolink]
+device = "/dev/ttyUSB0"
+
+[mqtt]
+host = "homesupport.intern.leusmann.org"
+client_id = "vcontrol"
+username = "mqtt_client"
+topic_prefix = "vcontrol"
+
+[homeassistant]
+discovery_prefix = "homeassistant"
+
+# --- Temperatures ---
+
+[[command]]
+name = "ADC_IstTemperaturwert_ATS"     # Außentemperatur
+
+[[command]]
+name = "TiefpassTemperaturwert_ATS"    # Außentemperatur gedämpft
+
+[[command]]
+name = "Gemischte_AT"                  # gemischte Außentemperatur
+
+[[command]]
+name = "ADC_Isttemperaturwert_KTS"     # Kesselwassertemperatur
+
+[[command]]
+name = "TiefpassTemperaturwert_KTS"    # Kesselwassertemperatur gedämpft
+
+[[command]]
+name = "ADC_Isttemperaturwert_2"       # Fühler 2 (Kessel-/Anlagenvorlauf)
+
+[[command]]
+name = "VorlauftemperaturM1"           # Vorlauftemperatur
+
+[[command]]
+name = "ADC_IstTemperaturwert_STS1"    # Trinkwassertemperatur
+
+[[command]]
+name = "TiefpassTemperaturwert_STS1"   # Trinkwassertemperatur gedämpft
+
+# --- Setpoints and mode ---
+
+[[command]]
+name = "VT_SolltemperaturA1M1"         # Vorlauftemperatur-Sollwert
+
+[[command]]
+name = "VT_SollKesselA1M1_NR1"         # Kesselwassertemperatur-Sollwert
+
+[[command]]
+name = "HK_RaumsolltemperaturaktuellA1M1"  # Raumtemperatur-Sollwert aktuell
+
+[[command]]
+name = "WW_SolltemperaturAktuell"      # Trinkwassertemperatur-Sollwert aktuell
+
+[[command]]
+name = "HK_AktuelleBetriebsartA1M1"    # Betriebsart
+
+[[command]]
+name = "WW_Status_NR2"                 # Status Warmwasserbereitung
+
+[[command]]
+name = "Bedien_WW_Solltemperatur"      # Trinkwassertemperatur-Sollwert
+interval = 300
+
+[[command]]
+name = "BedienRTSolltemperaturA1M1"    # Raumtemperatur Soll
+interval = 300
+
+[[command]]
+name = "BedienRTSolltemperaturReduziertA1M1"  # Red. Raumtemp. Soll
+interval = 300
+
+[[command]]
+name = "BedienRTSoll_PartyA1M1"        # Party-Raumtemperatur Soll
+interval = 300
+
+[[command]]
+name = "BedienteilBA_GWGA1"            # Betriebsprogramm
+interval = 300
+
+[[command]]
+name = "NRx_PartybetriebA1M1_D"        # Partybetrieb
+interval = 300
+
+[[command]]
+name = "NRx_SparbetriebA1M1_D"         # Sparbetrieb
+interval = 300
+
+[[command]]
+name = "HK_FerienbetriebA1M1"          # Ferienprogramm
+interval = 300
+
+[[command]]
+name = "KD3_KonfiNeigungA1"            # Neigung Heizkennlinie
+interval = 3600
+
+[[command]]
+name = "KD4_KonfiNiveauA1"             # Niveau Heizkennlinie
+interval = 3600
+
+# --- Burner, pumps ---
+
+[[command]]
+name = "DigitalAusgang_Brenner"        # Brenner
+
+[[command]]
+name = "HK_PumpenzustandA1M1"          # Heizkreispumpe
+
+[[command]]
+name = "DigitalAusgang_Speicherladepumpe"  # Speicherladepumpe
+
+[[command]]
+name = "DigitalAusgang_Zirkulationspumpe"  # Zirkulationspumpe
+
+# --- Oil usage ---
+# Oil used ≈ burner hours × burner consumption; DigitalAusgang_Brenner above gives the run times.
+
+[[command]]
+name = "Oelverbrauch"                  # Brennstoffverbrauch, l (counter uncalibrated, see note)
+interval = 300
+
+[[command]]
+name = "BetriebsstundenBrenner1"       # Brennerbetriebsstunden, h
+interval = 300
+
+[[command]]
+name = "Brennerstarts"
+interval = 300
+
+[[command]]
+name = "K26_KonfiVerbrauchBrenner1GWG" # 26: Brennstoffverbrauch Brenner, the factor behind Oelverbrauch
+interval = 86400
+
+# --- Status, faults ---
+
+[[command]]
+name = "HK_Frostgefahr_aktivA1M1"      # Frostgefahr
+interval = 300
+
+[[command]]
+name = "TemperaturFehler_ATS"          # Fühlerstatus Außentemperatur
+interval = 300
+
+[[command]]
+name = "TemperaturFehler_STS1"         # Fühlerstatus Speicher
+interval = 300
+
+[[command]]
+name = "VorlauftemperaturstatusA1M1"   # Fühlerstatus Vorlauf
+interval = 300
+
+# --- Maintenance ---
+
+[[command]]
+name = "LetzteBrennerWartung"          # Brennerstunden seit letzter Wartung
+interval = 3600
+
+[[command]]
+name = "LetzteIntervallWartung"        # Monate seit letzter Wartung
+interval = 3600
