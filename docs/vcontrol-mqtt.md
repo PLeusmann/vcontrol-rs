@@ -127,6 +127,7 @@ One entry for each command to read.
 | Key | Required | Meaning |
 |---|---|---|
 | `name` | yes | Name of the command. |
+| `display_name` | no | Entity name in Home Assistant, instead of `name`. Topics and entity ids still use `name`, so changing it later keeps the entity and its history. |
 | `interval` | no | Seconds between reads of this command, instead of `poll_interval`. Use a long interval for values that rarely change. |
 
 Only commands with simple values can be used: numbers, texts and values with named states. Schedules, dates, error lists and byte arrays are not supported.

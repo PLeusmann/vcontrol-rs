@@ -48,120 +48,152 @@ host = "localhost"             # required
 
 # Polled commands. Each [[command]] takes:
 # name = "..."                 # required
+# display_name = "..."         # the entity name in Home Assistant; default: name
 # interval = 300               # seconds, 1..31536000; default: poll_interval
 
 # --- Temperatures ---
 
 [[command]]
-name = "ADC_IstTemperaturwert_ATS"     # Außentemperatur
+name = "ADC_IstTemperaturwert_ATS"
+display_name = "Außentemperatur"
 
 [[command]]
-name = "TiefpassTemperaturwert_ATS"    # Außentemperatur gedämpft
+name = "TiefpassTemperaturwert_ATS"
+display_name = "Außentemperatur gedämpft"
 
 [[command]]
-name = "Gemischte_AT"                  # gemischte Außentemperatur
+name = "Gemischte_AT"
+display_name = "Gemischte Außentemperatur"
 
 [[command]]
-name = "ADC_Isttemperaturwert_KTS"     # Kesselwassertemperatur
+name = "ADC_Isttemperaturwert_KTS"
+display_name = "Kesselwassertemperatur"
 
 [[command]]
-name = "TiefpassTemperaturwert_KTS"    # Kesselwassertemperatur gedämpft
+name = "TiefpassTemperaturwert_KTS"
+display_name = "Kesselwassertemperatur gedämpft"
 
 [[command]]
-name = "ADC_Isttemperaturwert_2"       # Fühler 2 (Kessel-/Anlagenvorlauf)
+name = "ADC_Isttemperaturwert_2"
+display_name = "Fühler 2 (Kessel-/Anlagenvorlauf)"
 
 [[command]]
-name = "VorlauftemperaturM1"           # Vorlauftemperatur
+name = "VorlauftemperaturM1"
+display_name = "Vorlauftemperatur"
 
 [[command]]
-name = "ADC_IstTemperaturwert_STS1"    # Trinkwassertemperatur
+name = "ADC_IstTemperaturwert_STS1"
+display_name = "Trinkwassertemperatur"
 
 [[command]]
-name = "TiefpassTemperaturwert_STS1"   # Trinkwassertemperatur gedämpft
+name = "TiefpassTemperaturwert_STS1"
+display_name = "Trinkwassertemperatur gedämpft"
 
 # --- Setpoints and mode ---
 
 [[command]]
-name = "VT_SolltemperaturA1M1"         # Vorlauftemperatur-Sollwert
+name = "VT_SolltemperaturA1M1"
+display_name = "Vorlauftemperatur-Sollwert"
 
 [[command]]
-name = "VT_SollKesselA1M1_NR1"         # Kesselwassertemperatur-Sollwert
+name = "VT_SollKesselA1M1_NR1"
+display_name = "Kesselwassertemperatur-Sollwert"
 
 [[command]]
-name = "HK_RaumsolltemperaturaktuellA1M1"  # Raumtemperatur-Sollwert aktuell
+name = "HK_RaumsolltemperaturaktuellA1M1"
+display_name = "Raumtemperatur-Sollwert aktuell"
 
 [[command]]
-name = "WW_SolltemperaturAktuell"      # Trinkwassertemperatur-Sollwert aktuell
+name = "WW_SolltemperaturAktuell"
+display_name = "Trinkwassertemperatur-Sollwert aktuell"
 
 [[command]]
-name = "HK_AktuelleBetriebsartA1M1"    # Betriebsart
+name = "HK_AktuelleBetriebsartA1M1"
+display_name = "Betriebsart"
 
 [[command]]
-name = "WW_Status_NR2"                 # Status Warmwasserbereitung
+name = "WW_Status_NR2"
+display_name = "Status Warmwasserbereitung"
 
 [[command]]
-name = "Bedien_WW_Solltemperatur"      # Trinkwassertemperatur-Sollwert
+name = "Bedien_WW_Solltemperatur"
+display_name = "Trinkwassertemperatur-Sollwert"
 interval = 300
 
 [[command]]
-name = "BedienRTSolltemperaturA1M1"    # Raumtemperatur Soll
+name = "BedienRTSolltemperaturA1M1"
+display_name = "Raumtemperatur Soll"
 interval = 300
 
 [[command]]
-name = "BedienRTSolltemperaturReduziertA1M1"  # Red. Raumtemp. Soll
+name = "BedienRTSolltemperaturReduziertA1M1"
+display_name = "Reduzierte Raumtemperatur Soll"
 interval = 300
 
 [[command]]
-name = "BedienRTSoll_PartyA1M1"        # Party-Raumtemperatur Soll
+name = "BedienRTSoll_PartyA1M1"
+display_name = "Party-Raumtemperatur Soll"
 interval = 300
 
 [[command]]
-name = "BedienteilBA_GWGA1"            # Betriebsprogramm
+name = "BedienteilBA_GWGA1"
+display_name = "Betriebsprogramm"
 interval = 300
 
 [[command]]
-name = "NRx_PartybetriebA1M1_D"        # Partybetrieb
+name = "NRx_PartybetriebA1M1_D"
+display_name = "Partybetrieb"
 interval = 300
 
 [[command]]
-name = "NRx_SparbetriebA1M1_D"         # Sparbetrieb
+name = "NRx_SparbetriebA1M1_D"
+display_name = "Sparbetrieb"
 interval = 300
 
 [[command]]
-name = "HK_FerienbetriebA1M1"          # Ferienprogramm
+name = "HK_FerienbetriebA1M1"
+display_name = "Ferienprogramm"
 interval = 300
 
 [[command]]
-name = "KD3_KonfiNeigungA1"            # Neigung Heizkennlinie
+name = "KD3_KonfiNeigungA1"
+display_name = "Neigung Heizkennlinie"
 interval = 3600
 
 [[command]]
-name = "KD4_KonfiNiveauA1"             # Niveau Heizkennlinie
+name = "KD4_KonfiNiveauA1"
+display_name = "Niveau Heizkennlinie"
 interval = 3600
 
 # --- Burner, pumps ---
 
 [[command]]
-name = "DigitalAusgang_Brenner"        # Brenner
+name = "DigitalAusgang_Brenner"
+display_name = "Brenner"
 
 [[command]]
-name = "HK_PumpenzustandA1M1"          # Heizkreispumpe
+name = "HK_PumpenzustandA1M1"
+display_name = "Heizkreispumpe"
 
 [[command]]
-name = "DigitalAusgang_Speicherladepumpe"  # Speicherladepumpe
+name = "DigitalAusgang_Speicherladepumpe"
+display_name = "Speicherladepumpe"
 
 [[command]]
-name = "DigitalAusgang_Zirkulationspumpe"  # Zirkulationspumpe
+name = "DigitalAusgang_Zirkulationspumpe"
+display_name = "Zirkulationspumpe"
 
 # --- Oil usage ---
 # Oil used ≈ burner hours × burner consumption; DigitalAusgang_Brenner above gives the run times.
 
 [[command]]
-name = "Oelverbrauch"                  # Brennstoffverbrauch, l (counter uncalibrated, see K26 below)
+name = "Oelverbrauch"
+display_name = "Brennstoffverbrauch"  # l, counter uncalibrated, see K26 below
 interval = 300
 
 [[command]]
-name = "BetriebsstundenBrenner1"       # Brennerbetriebsstunden, h
+name = "BetriebsstundenBrenner1"
+display_name = "Brennerbetriebsstunden"
 interval = 300
 
 [[command]]
@@ -169,33 +201,40 @@ name = "Brennerstarts"
 interval = 300
 
 [[command]]
-name = "K26_KonfiVerbrauchBrenner1GWG" # 26: Brennstoffverbrauch Brenner, the factor behind Oelverbrauch
+name = "K26_KonfiVerbrauchBrenner1GWG"
+display_name = "Brennstoffverbrauch Brenner"  # coding address 26, the factor behind Oelverbrauch
 interval = 86400
 
 # --- Status, faults ---
 
 [[command]]
-name = "HK_Frostgefahr_aktivA1M1"      # Frostgefahr
+name = "HK_Frostgefahr_aktivA1M1"
+display_name = "Frostgefahr"
 interval = 300
 
 [[command]]
-name = "TemperaturFehler_ATS"          # Fühlerstatus Außentemperatur
+name = "TemperaturFehler_ATS"
+display_name = "Fühlerstatus Außentemperatur"
 interval = 300
 
 [[command]]
-name = "TemperaturFehler_STS1"         # Fühlerstatus Speicher
+name = "TemperaturFehler_STS1"
+display_name = "Fühlerstatus Speicher"
 interval = 300
 
 [[command]]
-name = "VorlauftemperaturstatusA1M1"   # Fühlerstatus Vorlauf
+name = "VorlauftemperaturstatusA1M1"
+display_name = "Fühlerstatus Vorlauf"
 interval = 300
 
 # --- Maintenance ---
 
 [[command]]
-name = "LetzteBrennerWartung"          # Brennerstunden seit letzter Wartung
+name = "LetzteBrennerWartung"
+display_name = "Brennerstunden seit letzter Wartung"
 interval = 3600
 
 [[command]]
-name = "LetzteIntervallWartung"        # Monate seit letzter Wartung
+name = "LetzteIntervallWartung"
+display_name = "Monate seit letzter Wartung"
 interval = 3600

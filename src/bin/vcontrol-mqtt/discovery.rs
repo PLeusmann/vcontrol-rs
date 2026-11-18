@@ -25,7 +25,7 @@ pub fn message(config: &Checked, device_name: &str, polled: &Polled) -> (String,
   let command = polled.command;
 
   let mut entity = json!({
-    "name": polled.name,
+    "name": polled.display_name,
     "unique_id": format!("{client_id}_{object_id}"),
     "state_topic": topics::state(prefix, &polled.name),
     "availability_topic": topics::status(prefix),
@@ -142,6 +142,17 @@ mod tests {
     let options = entity["options"].as_array().unwrap();
     assert_eq!(options[0], "No cylinder priority");
     assert!(options.contains(&json!("Modulating priority (4)")));
+  }
+
+  #[test]
+  fn display_name_only_changes_the_entity_name() {
+    let toml = "poll_interval = 60\n[optolink]\ndevice = \"d\"\n[mqtt]\nhost = \"h\"\n[[command]]\nname = \"ADC_Isttemperaturwert_2\"\ndisplay_name = \"Vorlauf\"";
+    let config = crate::config::Config::parse(toml, None).unwrap().check(crate::config::tests::device()).unwrap();
+    let (topic, payload) = message(&config, "V200KO2B", &config.commands()[0]);
+    let entity: Value = serde_json::from_str(&payload).unwrap();
+    assert_eq!(entity["name"], "Vorlauf");
+    assert_eq!(entity["unique_id"], "vcontrol_ADC_Isttemperaturwert_2");
+    assert_eq!(topic, "homeassistant/sensor/vcontrol/ADC_Isttemperaturwert_2/config");
   }
 
   #[test]

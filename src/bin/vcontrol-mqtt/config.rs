@@ -71,6 +71,8 @@ impl Default for HomeAssistantConfig {
 #[serde(deny_unknown_fields)]
 pub struct CommandConfig {
   pub name: String,
+  /// The entity name in Home Assistant. Defaults to `name`.
+  pub display_name: Option<String>,
   /// Seconds.
   pub interval: Option<u64>,
 }
@@ -94,6 +96,7 @@ const INTERVALS: std::ops::RangeInclusive<u64> = 1..=365 * 24 * 3600;
 #[derive(Debug)]
 pub struct Polled {
   pub name: String,
+  pub display_name: String,
   pub command: &'static Command,
   pub interval: Duration,
   pub writable: bool,
@@ -233,6 +236,9 @@ impl Config {
       if !command.access_mode().is_read() {
         problems.push(format!("command {name:?} cannot be read"));
       }
+      if config.display_name.as_ref().is_some_and(|display_name| display_name.trim().is_empty()) {
+        problems.push(format!("command {name:?}: display_name must not be empty"));
+      }
       if config.interval.is_some_and(|interval| !INTERVALS.contains(&interval)) {
         problems.push(format!("command {name:?}: interval must be between 1 second and 1 year"));
       }
@@ -244,6 +250,7 @@ impl Config {
 
       commands.push(Polled {
         name: name.clone(),
+        display_name: config.display_name.clone().unwrap_or_else(|| name.clone()),
         command,
         interval: Duration::from_secs(config.interval.unwrap_or(self.poll_interval)),
         writable,
@@ -329,6 +336,7 @@ pub mod tests {
 
     [[command]]
     name = "ADC_Isttemperaturwert_2"
+    display_name = "Vorlauftemperatur"
     interval = 3600
   "#;
 
@@ -352,6 +360,10 @@ pub mod tests {
     );
     assert!(std::ptr::eq(setpoint.command, command("Bedien_WW_Solltemperatur")));
     assert_eq!((temperature.interval, temperature.writable), (Duration::from_secs(3600), false));
+    assert_eq!(
+      (setpoint.display_name.as_str(), temperature.display_name.as_str()),
+      ("Bedien_WW_Solltemperatur", "Vorlauftemperatur")
+    );
   }
 
   #[test]
@@ -403,6 +415,12 @@ pub mod tests {
     assert!(Config::parse(&toml("", &[]).replace("device = \"/dev/ttyUSB0\"", ""), None).is_err());
     assert!(Config::parse(&toml("", &[]).replace("[mqtt]", "port = 1\n[mqtt]"), None).is_err());
     assert!(Config::parse(&format!("{}interval = -1", toml("", &["ADC_Isttemperaturwert_2"])), None).is_err());
+  }
+
+  #[test]
+  fn refuses_empty_display_name() {
+    let config = toml("", &["ADC_Isttemperaturwert_2"]) + "display_name = \" \"";
+    assert!(problems(&config)[0].contains("display_name must not be empty"));
   }
 
   #[test]

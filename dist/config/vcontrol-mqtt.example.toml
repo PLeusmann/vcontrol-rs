@@ -26,6 +26,7 @@ discovery_prefix = "homeassistant"
 
 [[command]]
 name = "ADC_Isttemperaturwert_KTS"
+display_name = "Kesselwassertemperatur"   # optional, the entity name in Home Assistant; default: name
 
 [[command]]
 name = "Bedien_WW_Solltemperatur"
