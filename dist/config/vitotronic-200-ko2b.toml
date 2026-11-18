@@ -226,15 +226,3 @@ interval = 300
 name = "VorlauftemperaturstatusA1M1"
 display_name = "Fühlerstatus Vorlauf"
 interval = 300
-
-# --- Maintenance ---
-
-[[command]]
-name = "LetzteBrennerWartung"
-display_name = "Brennerstunden seit letzter Wartung"
-interval = 3600
-
-[[command]]
-name = "LetzteIntervallWartung"
-display_name = "Monate seit letzter Wartung"
-interval = 3600
