@@ -242,8 +242,11 @@ All tests run with `cargo test --features mqtt` inside the devcontainer.
   - the `armv7-unknown-linux-musleabihf` Rust target
   - an armv7 C cross compiler for `ring`. Debian ships no musl cross gcc, so set `CC_armv7_unknown_linux_musleabihf` and `CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_LINKER` explicitly.
   - `mosquitto` and `openssl` for the broker tests
-- **Build command:** `cargo build --release --features mqtt --bin vcontrol-mqtt --target armv7-unknown-linux-musleabihf`
+  - `cargo-deb` for the packages
+- **Build command:** `just dist` builds the Debian package `vcontrol-rs` for `armv7-unknown-linux-musleabihf` and `arm-unknown-linux-musleabihf` into `target/dist/<target>/`. The `justfile` runs every recipe in the devcontainer. The package is described in `[package.metadata.deb]` in `Cargo.toml`.
 - **Repo files:**
-  - `dist/config/vcontrol-mqtt.example.toml`
-  - `dist/systemd/vcontrol-mqtt.service` (`Restart=on-failure`, `EnvironmentFile` for the password). Exit code 1 means the Optolink link is lost or cannot be opened; exit code 2 means the configuration is wrong, and the unit does not restart on it.
-  - a ReadMe section: build, copy to the Pi, run, and the broker ACL advice
+  - `dist/config/vitotronic-200-ko2b.toml`: the configuration the package installs as the conffile `/etc/vcontrol/vcontrol-mqtt.toml`, with every option shown. A test checks that it loads.
+  - `dist/config/vcontrol-mqtt.example.toml`: a short generic example, not packaged
+  - `dist/systemd/vcontrol-mqtt.service` (`Restart=on-failure`, `EnvironmentFile` for the password). Exit code 1 means the Optolink link is lost or cannot be opened; exit code 2 means the configuration is wrong, and the unit does not restart on it. The package installs it disabled and restarts it on upgrade only if it is running.
+  - `dist/debian/postinst`: prints the remaining setup steps after the first install
+  - a ReadMe section: build, install on the Pi, run, and the broker ACL advice

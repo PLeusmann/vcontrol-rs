@@ -1,10 +1,12 @@
-# vcontrol-mqtt for the Vitotronic 200 KO2B (V200KO2B) on heizomat, heating circuit 1 only.
-# Lives in ~/vcontrol-mqtt on heizomat; the broker password is in ~/vcontrol-mqtt/.env (VCONTROL_MQTT_PASSWORD).
-# Values: Obsidian note "Heizung vcontrol Werte".
+# vcontrol-mqtt for the Vitotronic 200 KO2B (V200KO2B), heating circuit 1 only.
+# Installed as /etc/vcontrol/vcontrol-mqtt.toml; your edits survive package upgrades.
+# Set up [mqtt] below; the broker password goes into /etc/vcontrol/vcontrol-mqtt.env (VCONTROL_MQTT_PASSWORD=...).
+# Command names are those of `vcontrol cat`; on another controller model, replace the commands below.
 # Left out: coding addresses (Kxx, set by the installer), static ids, and complex types
 # (Uhrzeit, error list, holiday dates, device_id), which the bridge cannot poll.
+# Options shown commented out are optional; their value is the default unless noted.
 
-poll_interval = 60             # live values
+poll_interval = 60             # seconds, for every command without its own `interval`
 
 # Read-only: nothing is subscribed on `/set`, Home Assistant shows sensors only.
 writable = []
@@ -23,18 +25,30 @@ writable = []
 #   "KD3_KonfiNeigungA1",                   # Neigung Heizkennlinie, 0.2..3.5
 #   "KD4_KonfiNiveauA1",                    # Niveau Heizkennlinie, -13..40 K
 # ]
+# Top-level keys must come before the first table.
 
 [optolink]
 device = "/dev/ttyUSB0"
+# Instead of `device`, a TCP connection (e.g. ser2net):
+# host = "localhost"
+# port = 3002                  # required with `host`, no default
 
 [mqtt]
-host = "homesupport.intern.leusmann.org"
-client_id = "vcontrol"
-username = "mqtt_client"
-topic_prefix = "vcontrol"
+host = "localhost"             # required
+# port = 1883
+# client_id = "vcontrol"       # also used in discovery ids, so must be unique per controller
+# username = "vcontrol"        # no default; anonymous without it
+# password = "..."             # better: VCONTROL_MQTT_PASSWORD in /etc/vcontrol/vcontrol-mqtt.env, which overrides this
+# tls = false
+# ca_file = "/etc/vcontrol/ca.pem"   # required when tls = true
+# topic_prefix = "vcontrol"
 
-[homeassistant]
-discovery_prefix = "homeassistant"
+# [homeassistant]                      # optional table; with it, discovery_prefix is required
+# discovery_prefix = "homeassistant"   # must differ from mqtt.topic_prefix
+
+# Polled commands. Each [[command]] takes:
+# name = "..."                 # required
+# interval = 300               # seconds, 1..31536000; default: poll_interval
 
 # --- Temperatures ---
 
@@ -143,7 +157,7 @@ name = "DigitalAusgang_Zirkulationspumpe"  # Zirkulationspumpe
 # Oil used ≈ burner hours × burner consumption; DigitalAusgang_Brenner above gives the run times.
 
 [[command]]
-name = "Oelverbrauch"                  # Brennstoffverbrauch, l (counter uncalibrated, see note)
+name = "Oelverbrauch"                  # Brennstoffverbrauch, l (counter uncalibrated, see K26 below)
 interval = 300
 
 [[command]]

@@ -4,7 +4,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/vcontrol-mqtt --config /etc/vcontrol/vcontrol-mqtt.toml
+ExecStart=/usr/bin/vcontrol-mqtt --config /etc/vcontrol/vcontrol-mqtt.toml
 # Contains VCONTROL_MQTT_PASSWORD=...; keep it readable by root only.
 EnvironmentFile=-/etc/vcontrol/vcontrol-mqtt.env
 # The Bridge exits with 1 when the Optolink link is lost, and with 2 when the configuration is wrong.

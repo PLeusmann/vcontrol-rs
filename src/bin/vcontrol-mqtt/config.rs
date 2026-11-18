@@ -361,6 +361,14 @@ pub mod tests {
     assert_eq!(checked.commands().iter().filter(|polled| polled.writable).count(), 1);
   }
 
+  /// The config the .deb installs as /etc/vcontrol/vcontrol-mqtt.toml.
+  #[test]
+  fn default_config_is_valid() {
+    let default = include_str!("../../../dist/config/vitotronic-200-ko2b.toml");
+    let checked = Config::parse(default, None).unwrap().check(device()).unwrap();
+    assert!(checked.commands().iter().all(|polled| !polled.writable));
+  }
+
   #[test]
   fn defaults_and_tcp_optolink() {
     let config = Config::parse(

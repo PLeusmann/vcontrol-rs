@@ -14,3 +14,6 @@ ENV CC_armv7_unknown_linux_musleabihf=arm-linux-gnueabihf-gcc \
 ENV CC_arm_unknown_linux_musleabihf=arm-linux-gnueabihf-gcc \
     CFLAGS_arm_unknown_linux_musleabihf="-march=armv6 -mfpu=vfp -mfloat-abi=hard -marm" \
     CARGO_TARGET_ARM_UNKNOWN_LINUX_MUSLEABIHF_LINKER=arm-linux-gnueabihf-gcc
+
+# Builds the .deb packages (`just dist`).
+RUN cargo install cargo-deb --locked --version 3.8.0

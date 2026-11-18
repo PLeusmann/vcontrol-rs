@@ -21,26 +21,25 @@ The `VControl` struct is a high-level abstraction for a complete system, which c
 
 ### Build
 
-Inside the devcontainer, for a Raspberry Pi with a 32-bit OS:
+The `justfile` runs everything in the devcontainer, which it builds and starts itself; the host needs only `docker` and `just`.
 
-```sh
-cargo build --release --features mqtt --bin vcontrol-mqtt --target armv7-unknown-linux-musleabihf
-```
-
-The binary is statically linked. The tests need the devcontainer too (they start `mosquitto`): `cargo test --features mqtt`.
+| Recipe | Does |
+|---|---|
+| `just build` / `just test` / `just clippy` | `cargo build` / `test` / `clippy` with `--features mqtt`. The tests start `mosquitto`. |
+| `just dist [target...]` | the Debian packages for a Raspberry Pi with a 32-bit OS, in `target/dist/<target>/`: `armv7-unknown-linux-musleabihf` (Pi 2 and later) and `arm-unknown-linux-musleabihf` (Pi 1, Zero) |
 
 ### Install on the Pi
 
 ```sh
-scp target/armv7-unknown-linux-musleabihf/release/vcontrol-mqtt pi@raspberrypi:/tmp/
-scp dist/config/vcontrol-mqtt.example.toml dist/systemd/vcontrol-mqtt.service pi@raspberrypi:/tmp/
+scp target/dist/armv7-unknown-linux-musleabihf/vcontrol-rs_*.deb pi@raspberrypi:/tmp/
 
 # On the Pi:
-sudo install /tmp/vcontrol-mqtt /usr/local/bin/
-sudo install -D -m 644 /tmp/vcontrol-mqtt.example.toml /etc/vcontrol/vcontrol-mqtt.toml   # then edit it
+sudo dpkg -i /tmp/vcontrol-rs_*.deb
+sudoedit /etc/vcontrol/vcontrol-mqtt.toml   # at least [mqtt] host
 echo 'VCONTROL_MQTT_PASSWORD=...' | sudo install -m 600 /dev/stdin /etc/vcontrol/vcontrol-mqtt.env
-sudo install -m 644 /tmp/vcontrol-mqtt.service /etc/systemd/system/
 ```
+
+The package installs `vcontrol-mqtt` and `vcontrol` in `/usr/bin`, the configuration for a Vitotronic 200 KO2B as `/etc/vcontrol/vcontrol-mqtt.toml` (kept on upgrades), and the systemd unit, not enabled.
 
 ### Run
 

@@ -14,31 +14,36 @@ Only one program can use the Optolink interface at a time. Stop `vcontrold` or o
 
 ## Install
 
-Build the binary inside the devcontainer of this repository. For a Raspberry Pi with a 32-bit OS, the target depends on what `uname -m` prints on the Pi:
+Build the Debian package in this repository. You need `docker` and `just`; the build runs in the devcontainer, which `just` creates:
 
-| `uname -m` | Pi models | Target |
+```sh
+just dist
+```
+
+This builds one package per Raspberry Pi target, for a 32-bit OS. Pick the one that matches what `uname -m` prints on the Pi:
+
+| `uname -m` | Pi models | Package |
 |---|---|---|
-| `armv7l` | 2, 3, 4 | `armv7-unknown-linux-musleabihf` |
-| `armv6l` | 1, Zero | `arm-unknown-linux-musleabihf` |
+| `armv7l` | 2, 3, 4 | `target/dist/armv7-unknown-linux-musleabihf/vcontrol-rs_<version>-1_armhf.deb` |
+| `armv6l` | 1, Zero | `target/dist/arm-unknown-linux-musleabihf/vcontrol-rs_<version>-1_armhf.deb` |
+
+`just dist armv7-unknown-linux-musleabihf` builds only one of them. Copy the package to the Pi and install it:
 
 ```sh
-cargo build --release --features mqtt --bin vcontrol-mqtt --target armv7-unknown-linux-musleabihf
+scp target/dist/armv7-unknown-linux-musleabihf/vcontrol-rs_*.deb pi@raspberrypi:/tmp/
+ssh pi@raspberrypi sudo dpkg -i /tmp/vcontrol-rs_*.deb
 ```
 
-The result is one statically linked file, `target/<target>/release/vcontrol-mqtt`. Copy it to the Pi together with the example files:
+The package installs:
 
-```sh
-scp target/armv7-unknown-linux-musleabihf/release/vcontrol-mqtt pi@raspberrypi:/tmp/
-scp dist/config/vcontrol-mqtt.example.toml dist/systemd/vcontrol-mqtt.service pi@raspberrypi:/tmp/
-```
+| Path | What |
+|---|---|
+| `/usr/bin/vcontrol-mqtt`, `/usr/bin/vcontrol` | the bridge and the command line tool, statically linked |
+| `/etc/vcontrol/vcontrol-mqtt.toml` | the configuration, for a Vitotronic 200 KO2B; your edits survive upgrades |
+| `/usr/lib/systemd/system/vcontrol-mqtt.service` | the service, installed but not enabled |
+| `/usr/share/doc/vcontrol-rs/` | this guide and the [real device test](vcontrol-mqtt-real-device-test.md) |
 
-On the Pi:
-
-```sh
-sudo install /tmp/vcontrol-mqtt /usr/local/bin/
-sudo install -D -m 644 /tmp/vcontrol-mqtt.example.toml /etc/vcontrol/vcontrol-mqtt.toml
-sudo install -m 644 /tmp/vcontrol-mqtt.service /etc/systemd/system/
-```
+After the first install, `dpkg` prints the remaining steps: configure, set the password, try it by hand, enable the service. They are described below. An upgrade restarts the service only if it is running.
 
 ## Find the command names
 
@@ -52,7 +57,7 @@ Use the names exactly as printed, including upper and lower case.
 
 ## Configure
 
-Edit `/etc/vcontrol/vcontrol-mqtt.toml`. A complete example is in [`vcontrol-mqtt.example.toml`](../dist/config/vcontrol-mqtt.example.toml).
+Edit `/etc/vcontrol/vcontrol-mqtt.toml`. The installed file ([`vitotronic-200-ko2b.toml`](../dist/config/vitotronic-200-ko2b.toml)) lists all options, the optional ones commented out; set at least `[mqtt] host`. Its commands are for a Vitotronic 200 KO2B; for another controller, start from [`vcontrol-mqtt.example.toml`](../dist/config/vcontrol-mqtt.example.toml). A minimal configuration:
 
 ```toml
 poll_interval = 60
