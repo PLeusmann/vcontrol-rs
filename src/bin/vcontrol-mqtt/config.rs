@@ -215,6 +215,11 @@ impl Config {
         problems.push(format!("command {name:?} is configured twice"));
         continue;
       }
+      // `VControl` resolves system Commands before device Commands, so it would read and write a different one.
+      if vcontrol::commands::system_command(name).is_some() {
+        problems.push(format!("command {name:?} is a system command"));
+        continue;
+      }
       let Some(command) = device.command(name) else {
         problems.push(format!("command {name:?} is unknown on device {}", device.name()));
         continue;
@@ -395,6 +400,13 @@ pub mod tests {
   #[test]
   fn refuses_unknown_command() {
     assert!(problem("", &["Nope"]).contains("unknown on device V200KO2B"));
+  }
+
+  #[test]
+  fn refuses_system_command_names() {
+    for name in ["device_id", "device_id_f0"] {
+      assert!(problem(&format!("writable = [\"{name}\"]"), &[name]).contains("is a system command"), "{name}");
+    }
   }
 
   #[test]
