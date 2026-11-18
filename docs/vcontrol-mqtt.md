@@ -14,13 +14,18 @@ Only one program can use the Optolink interface at a time. Stop `vcontrold` or o
 
 ## Install
 
-Build the binary inside the devcontainer of this repository. For a Raspberry Pi with a 32-bit OS:
+Build the binary inside the devcontainer of this repository. For a Raspberry Pi with a 32-bit OS, the target depends on what `uname -m` prints on the Pi:
+
+| `uname -m` | Pi models | Target |
+|---|---|---|
+| `armv7l` | 2, 3, 4 | `armv7-unknown-linux-musleabihf` |
+| `armv6l` | 1, Zero | `arm-unknown-linux-musleabihf` |
 
 ```sh
 cargo build --release --features mqtt --bin vcontrol-mqtt --target armv7-unknown-linux-musleabihf
 ```
 
-The result is one statically linked file, `target/armv7-unknown-linux-musleabihf/release/vcontrol-mqtt`. Copy it to the Pi together with the example files:
+The result is one statically linked file, `target/<target>/release/vcontrol-mqtt`. Copy it to the Pi together with the example files:
 
 ```sh
 scp target/armv7-unknown-linux-musleabihf/release/vcontrol-mqtt pi@raspberrypi:/tmp/
