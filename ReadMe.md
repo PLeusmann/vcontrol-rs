@@ -33,7 +33,7 @@ The binary is statically linked. The tests need the devcontainer too (they start
 
 ```sh
 scp target/armv7-unknown-linux-musleabihf/release/vcontrol-mqtt pi@raspberrypi:/tmp/
-scp vcontrol-mqtt.example.toml vcontrol-mqtt.service pi@raspberrypi:/tmp/
+scp dist/config/vcontrol-mqtt.example.toml dist/systemd/vcontrol-mqtt.service pi@raspberrypi:/tmp/
 
 # On the Pi:
 sudo install /tmp/vcontrol-mqtt /usr/local/bin/

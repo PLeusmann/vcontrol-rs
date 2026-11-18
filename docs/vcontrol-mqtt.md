@@ -29,7 +29,7 @@ The result is one statically linked file, `target/<target>/release/vcontrol-mqtt
 
 ```sh
 scp target/armv7-unknown-linux-musleabihf/release/vcontrol-mqtt pi@raspberrypi:/tmp/
-scp vcontrol-mqtt.example.toml vcontrol-mqtt.service pi@raspberrypi:/tmp/
+scp dist/config/vcontrol-mqtt.example.toml dist/systemd/vcontrol-mqtt.service pi@raspberrypi:/tmp/
 ```
 
 On the Pi:
@@ -52,7 +52,7 @@ Use the names exactly as printed, including upper and lower case.
 
 ## Configure
 
-Edit `/etc/vcontrol/vcontrol-mqtt.toml`. A complete example is in [`vcontrol-mqtt.example.toml`](../vcontrol-mqtt.example.toml).
+Edit `/etc/vcontrol/vcontrol-mqtt.toml`. A complete example is in [`vcontrol-mqtt.example.toml`](../dist/config/vcontrol-mqtt.example.toml).
 
 ```toml
 poll_interval = 60

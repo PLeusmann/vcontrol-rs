@@ -356,7 +356,7 @@ pub mod tests {
 
   #[test]
   fn example_config_is_valid() {
-    let example = include_str!("../../../vcontrol-mqtt.example.toml");
+    let example = include_str!("../../../dist/config/vcontrol-mqtt.example.toml");
     let checked = Config::parse(example, None).unwrap().check(device()).unwrap();
     assert_eq!(checked.commands().iter().filter(|polled| polled.writable).count(), 1);
   }

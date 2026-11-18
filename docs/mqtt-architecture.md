@@ -244,6 +244,6 @@ All tests run with `cargo test --features mqtt` inside the devcontainer.
   - `mosquitto` and `openssl` for the broker tests
 - **Build command:** `cargo build --release --features mqtt --bin vcontrol-mqtt --target armv7-unknown-linux-musleabihf`
 - **Repo files:**
-  - `vcontrol-mqtt.example.toml`
-  - `vcontrol-mqtt.service` (`Restart=on-failure`, `EnvironmentFile` for the password). Exit code 1 means the Optolink link is lost or cannot be opened; exit code 2 means the configuration is wrong, and the unit does not restart on it.
+  - `dist/config/vcontrol-mqtt.example.toml`
+  - `dist/systemd/vcontrol-mqtt.service` (`Restart=on-failure`, `EnvironmentFile` for the password). Exit code 1 means the Optolink link is lost or cannot be opened; exit code 2 means the configuration is wrong, and the unit does not restart on it.
   - a ReadMe section: build, copy to the Pi, run, and the broker ACL advice
