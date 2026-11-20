@@ -7,6 +7,10 @@ use crate::{
   types::{self, CircuitTimes, Date, DateTime, DeviceId, DeviceIdF0},
 };
 
+/// A Zeitprogramm (`CircuitTimes`, 56 bytes) is transferred as one telegram of this many bytes per day,
+/// Monday first, at `addr + 8 × day`: the controller answers at most 55 bytes per telegram.
+const DAY_LEN: usize = 8;
+
 /// A command which can be executed on an Optolink connection.
 #[derive(Debug, PartialEq)]
 pub struct Command {
@@ -289,7 +293,13 @@ impl Command {
     }
 
     let mut buf = vec![0; self.block_len];
-    protocol.get(o, self.addr, &mut buf).await?;
+    if self.data_type == DataType::CircuitTimes {
+      for (day, telegram) in buf.chunks_mut(DAY_LEN).enumerate() {
+        protocol.get(o, self.addr + (day * DAY_LEN) as u16, telegram).await?;
+      }
+    } else {
+      protocol.get(o, self.addr, &mut buf).await?;
+    }
 
     let bytes = &buf[self.byte_pos..(self.byte_pos + self.byte_len)];
 
@@ -304,6 +314,14 @@ impl Command {
     }
 
     let bytes = self.serialize(input)?;
+
+    // Not atomic: if a day fails, the days before it are already written.
+    if self.data_type == DataType::CircuitTimes {
+      for (day, telegram) in bytes.chunks(DAY_LEN).enumerate() {
+        protocol.set(o, self.addr + (day * DAY_LEN) as u16, telegram).await?;
+      }
+      return Ok(());
+    }
 
     protocol.set(o, self.addr, &bytes).await.map_err(Into::into)
   }
@@ -505,5 +523,113 @@ mod tests {
 
     let value = command.parse_value(&[0xfd, 0xff]).unwrap();
     assert_eq!(value, Value::Double(-0.3));
+  }
+
+  /// One Zeitphase per day, from (5 + day):00 to 22:00.
+  fn week() -> [u8; 56] {
+    std::array::from_fn(|i| match i % 8 {
+      0 => (i as u8 / 8 + 5) << 3,
+      1 => 22 << 3,
+      _ => 0xff,
+    })
+  }
+
+  /// A VS1 controller on TCP with `week()` at 0x2000 of memory at 0x2000. Records every telegram as (function, address, data)
+  /// and drops the connection at `fail_at`.
+  async fn fake_controller(fail_at: Option<u16>) -> (Optolink, tokio::task::JoinHandle<Vec<(u8, u16, Vec<u8>)>>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move {
+      let (mut stream, _) = listener.accept().await.unwrap();
+      let mut memory = week().to_vec();
+      let mut telegrams = vec![];
+      let mut buf = vec![];
+      let mut chunk = [0; 64];
+      loop {
+        match stream.read(&mut chunk).await {
+          Ok(0) | Err(_) => return telegrams,
+          Ok(n) => buf.extend_from_slice(&chunk[..n]),
+        }
+        loop {
+          let (function, addr, len) = match buf[..] {
+            [0x04, ..] => {
+              buf.remove(0);
+              stream.write_all(&[0x05]).await.unwrap();
+              continue;
+            },
+            [0x01, f @ (0xF7 | 0xF4), hi, lo, len, ..] => (f, u16::from_be_bytes([hi, lo]), len as usize),
+            _ => break,
+          };
+          let size = if function == 0xF4 { 5 + len } else { 5 };
+          if buf.len() < size {
+            break;
+          }
+          let data: Vec<u8> = buf.drain(..size).skip(5).collect();
+          telegrams.push((function, addr, if function == 0xF4 { data.clone() } else { vec![len as u8] }));
+          if Some(addr) == fail_at {
+            return telegrams;
+          }
+          let at = (addr - 0x2000) as usize;
+          if function == 0xF4 {
+            memory[at..at + len].copy_from_slice(&data);
+            stream.write_all(&[0x00]).await.unwrap();
+          } else {
+            stream.write_all(&memory[at..at + len]).await.unwrap();
+          }
+        }
+      }
+    });
+    (Optolink::connect(("127.0.0.1", port)).await.unwrap(), server)
+  }
+
+  #[tokio::test]
+  async fn zeitprogramm_is_read_one_day_per_telegram() {
+    let command = crate::device::V200KO2B.command("Schaltzeiten_A1M1_HK").unwrap();
+    let (mut optolink, server) = fake_controller(None).await;
+
+    let value = command.get(&mut optolink, Protocol::Vs1).await.unwrap();
+    drop(optolink);
+
+    let telegrams = server.await.unwrap();
+    let expected: Vec<_> = (0..7).map(|day| (0xF7, 0x2000 + 8 * day, vec![8])).collect();
+    assert_eq!(telegrams, expected);
+    let Value::CircuitTimes(week) = value else { panic!("{value:?}") };
+    assert_eq!(week.to_bytes(), self::week());
+  }
+
+  #[tokio::test]
+  async fn zeitprogramm_is_written_one_day_per_telegram() {
+    let command = crate::device::V200KO2B.command("Schaltzeiten_A1M1_HK").unwrap();
+    let mut bytes = week();
+    bytes[1] = 23 << 3;
+    let (mut optolink, server) = fake_controller(None).await;
+
+    let week = Value::CircuitTimes(Box::new(CircuitTimes::from_bytes(&bytes)));
+    command.set(&mut optolink, Protocol::Vs1, week).await.unwrap();
+    drop(optolink);
+
+    let expected: Vec<_> =
+      (0..7).map(|day| (0xF4, 0x2000 + 8 * day as u16, bytes[day * 8..day * 8 + 8].to_vec())).collect();
+    assert_eq!(server.await.unwrap(), expected);
+  }
+
+  #[tokio::test]
+  async fn zeitprogramm_transfer_stops_at_the_failing_day() {
+    let command = crate::device::V200KO2B.command("Schaltzeiten_A1M1_HK").unwrap();
+
+    let (mut optolink, server) = fake_controller(Some(0x2018)).await;
+    assert!(command.get(&mut optolink, Protocol::Vs1).await.is_err());
+    drop(optolink);
+    let addrs: Vec<u16> = server.await.unwrap().iter().map(|(_, addr, _)| *addr).collect();
+    assert_eq!(addrs, [0x2000, 0x2008, 0x2010, 0x2018]);
+
+    let (mut optolink, server) = fake_controller(Some(0x2018)).await;
+    let week = Value::CircuitTimes(Box::new(CircuitTimes::from_bytes(&[0xff; 56])));
+    assert!(command.set(&mut optolink, Protocol::Vs1, week).await.is_err());
+    drop(optolink);
+    let addrs: Vec<u16> = server.await.unwrap().iter().map(|(_, addr, _)| *addr).collect();
+    assert_eq!(addrs, [0x2000, 0x2008, 0x2010, 0x2018]);
   }
 }

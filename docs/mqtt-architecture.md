@@ -25,7 +25,7 @@ Out of scope (for now):
 
 - The library (`src/`) knows nothing about MQTT. Its changes:
   - `Command::set` returns `Error::InvalidArgument` instead of panicking on a failed `convert_back`, and the part that turns a value into bytes is public as `Command::serialize` (the counterpart of `Command::deserialize`), which the startup check needs.
-  - `Optolink::open` takes an exclusive lock on the device (§15).
+  - `Optolink::open` reports a device held by another process as such, and `reinitialize` keeps the device locked (§15).
   - A Zeitprogramm is transferred one day per telegram, and dates are written with the controller's weekday (§16).
 - The Bridge uses only the library's public API: `VControl`, `Device`, `Command`, `Value`, `OutputValue`.
 - Everything MQTT-related sits behind the `mqtt` feature, which includes `cli`:
@@ -251,7 +251,7 @@ Decided:
 | 6a | The real binary: startup order, exit codes 0/1/2, a write through the real `VControl`, `--read-only`, SIGTERM, a controller that stops answering | `tests/vcontrol_mqtt.rs`: fake controller speaking VS1 or VS2 over TCP + mosquitto, once for each protocol |
 | 7 | Real controller | On the Pi, first with `--read-only`, then live. The checklist is [`vcontrol-mqtt-real-device-test.md`](vcontrol-mqtt-real-device-test.md). Not done yet; it also measures the connect and read times against the 20 s and 5 s timeouts. |
 | 8 | Complex types: payloads, write validation (every rejection rule in §14), Ferienprogramm write order, Störungsmeldungen with unknown codes, Discovery JSON | Unit tests; fake `Controller` for the write order and the read-back |
-| 9 | Library: per-day transfer (7 telegrams at `addr + 8 × day`, a failure on day n stops there), weekday byte 1 = Monday … 7 = Sunday, the lock (a second `open` fails with the message in §15, the lock survives `reinitialize`) | Library unit tests; fake controller for the telegrams, a pseudo-terminal for the lock |
+| 9 | Library: per-day transfer (7 telegrams at `addr + 8 × day`, a failure on day n stops there), weekday byte 1 = Monday … 7 = Sunday, the lock (a second `open` fails with the message in §15, also without TIOCEXCL; the lock survives `reinitialize`, which reopens at once) | Library unit tests; fake controller for the telegrams, a pseudo-terminal for the lock |
 | 10 | Real controller, complex types and the lock | [`scripts/device-test-complex-types.sh`](../scripts/device-test-complex-types.sh) on the Pi once a package with §15 and §16 is installed: first read-only, then with `WRITE=yes`. Only after it passes are the complex Commands added to the prepared, commented-out `writable` list in `dist/config/vitotronic-200-ko2b.toml`. |
 
 All tests run with `cargo test --features mqtt` inside the devcontainer.
@@ -330,11 +330,15 @@ Terms follow the controller's service manual (see [`CONTEXT.md`](../CONTEXT.md))
 
 ## 15. Only one process on the Optolink
 
-Today the only protection is TIOCEXCL, which `tokio_serial` sets as a side effect when it opens the device. It has three gaps: root ignores it, `reinitialize` turns it off while it reopens the device, and a second process only gets a bare `EBUSY`.
+`serialport` (4.10.1, under `tokio_serial`) already locks the device when it opens it exclusively: it sets TIOCEXCL and takes `flock(LOCK_EX | LOCK_NB)` on the serial stream. Root cannot bypass the `flock`, and the kernel releases it when the process ends, including a crash. That lock is used; a second lock handle on the device would conflict with it. There were two gaps:
 
-- `Optolink::open` opens the device a second time as a lock handle, before the serial stream, and takes `flock(LOCK_EX | LOCK_NB)` on it. The `Optolink` keeps this handle for its whole life. `reinitialize` replaces only the serial stream, so the lock stays held. The kernel releases it when the process ends, including a crash, and root cannot bypass it.
-- TIOCEXCL stays as it is.
-- When another process holds the lock, `open` fails at once with an error that names the device and the cause, e.g. `/dev/ttyUSB0 is in use by another process (is vcontrol-mqtt running?)`. `EBUSY` from TIOCEXCL gets the same message.
+- A second process got a bare `Device or resource busy`, or (as root, which TIOCEXCL does not stop) `Unable to acquire exclusive lock on serial port`, both as `NotFound`.
+- `reinitialize` turned the lock into a shared one and then opened the new stream exclusively, which conflicts with its own old stream. It retried for 10 s and kept the old stream, without ever reopening.
+
+The fixes:
+
+- `serialport` reports both causes as `NoDevice` (a missing device is `Io(NotFound)`). `Optolink::open` turns `NoDevice` into a `ResourceBusy` error that names the device and the cause: `/dev/ttyUSB0 is in use by another process (is vcontrol-mqtt running?)`.
+- `reinitialize` opens the new stream with a shared lock while the old one still holds its own (shared) lock, closes the old one, and then makes the new one exclusive again. Another process's exclusive open fails throughout. Turning the shared lock into an exclusive one is not atomic in the kernel, so another process could take the device in that instant; `reinitialize` then fails and the caller sees the error.
 - **CLI:** fails fast, without waiting or retrying. To use it, stop the Bridge first (`sudo systemctl stop vcontrol-mqtt`), as the device test script does.
 - **Bridge:** if the CLI holds the device while the Bridge starts, opening fails with exit code 1, and systemd tries again every 10 s (`RestartSec=10`, §13) until the device is free.
 
