@@ -152,7 +152,7 @@ interval = 300
 
 [[command]]
 name = "HK_FerienbetriebA1M1"
-display_name = "Ferienprogramm"
+display_name = "Ferienbetrieb aktiv"
 interval = 300
 
 [[command]]
