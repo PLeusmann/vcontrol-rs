@@ -241,8 +241,10 @@ impl<C: Controller> Bridge<C> {
       },
     };
     // A Zeitprogramm (7 telegrams) or a Ferienprogramm (2 Commands) may be written in part when a call fails.
-    let may_be_partial =
-      !matches!(source, Source::Command(command) if payload::kind(command) != payload::Kind::Zeitprogramm);
+    let may_be_partial = match source {
+      Source::Command(command) => payload::kind(command) == payload::Kind::Zeitprogramm,
+      Source::Ferienprogramm { .. } => true,
+    };
 
     if self.read_only {
       for (command, value) in writes {

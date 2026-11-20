@@ -155,7 +155,8 @@ pub fn parse_ferienprogramm(payload: &[u8], today: Date) -> Result<Option<(Date,
 /// Validates a Zeitprogramm payload. Rejects, and never rounds, what the controller cannot store as given.
 fn parse_zeitprogramm(text: &str) -> Result<Value, String> {
   let json: serde_json::Value = serde_json::from_str(text).map_err(|err| format!("not JSON: {err}"))?;
-  let week: CircuitTimes = serde_json::from_value(json.clone()).map_err(|err| format!("not a Zeitprogramm: {err}"))?;
+  let week =
+    <CircuitTimes as serde::Deserialize>::deserialize(&json).map_err(|err| format!("not a Zeitprogramm: {err}"))?;
 
   // The library truncates times to the 10-minute grid when writing and ignores unknown fields: what it would
   // write must read back as exactly what was sent.

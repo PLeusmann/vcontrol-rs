@@ -534,7 +534,7 @@ mod tests {
     })
   }
 
-  /// A VS1 controller on TCP with `week()` at 0x2000 of memory at 0x2000. Records every telegram as (function, address, data)
+  /// A VS1 controller on TCP with `week()` in memory at 0x2000. Records every telegram as (function, address, data)
   /// and drops the connection at `fail_at`.
   async fn fake_controller(fail_at: Option<u16>) -> (Optolink, tokio::task::JoinHandle<Vec<(u8, u16, Vec<u8>)>>) {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
