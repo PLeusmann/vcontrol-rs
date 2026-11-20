@@ -23,6 +23,8 @@ pub struct Config {
   pub homeassistant: HomeAssistantConfig,
   #[serde(default, rename = "command")]
   pub commands: Vec<CommandConfig>,
+  #[serde(default, rename = "ferienprogramm")]
+  pub ferienprogramme: Vec<FerienprogrammConfig>,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -77,6 +79,20 @@ pub struct CommandConfig {
   pub interval: Option<u64>,
 }
 
+/// One entity from the two Date Commands of a Ferienprogramm.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FerienprogrammConfig {
+  /// Not a Command: the Bridge's name for the entity in topics, discovery ids and `writable`.
+  pub id: String,
+  /// The entity name in Home Assistant. Defaults to `id`.
+  pub display_name: Option<String>,
+  pub start: String,
+  pub end: String,
+  /// Seconds.
+  pub interval: Option<u64>,
+}
+
 fn localhost() -> String {
   "localhost".into()
 }
@@ -92,14 +108,25 @@ fn default_name() -> String {
 /// Seconds. The upper end keeps "now + interval" from overflowing.
 const INTERVALS: std::ops::RangeInclusive<u64> = 1..=365 * 24 * 3600;
 
-/// A Polled Command.
+/// A Polled Command, or a Ferienprogramm.
 #[derive(Debug)]
 pub struct Polled {
+  /// The Command name, or the `id` of a Ferienprogramm. Used in topics and discovery ids.
   pub name: String,
   pub display_name: String,
-  pub command: &'static Command,
+  pub source: Source,
   pub interval: Duration,
   pub writable: bool,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Source {
+  Command(&'static Command),
+  /// The names of the start and end Commands.
+  Ferienprogramm {
+    start: String,
+    end: String,
+  },
 }
 
 /// A config that passed every startup check. Can only be created by [`Config::check`].
@@ -131,6 +158,8 @@ fn writable_problem(command: &Command) -> Option<String> {
   }
 
   let samples: Vec<f64> = match payload::kind(command) {
+    // Any week or date the write gate lets through can be stored.
+    Kind::Zeitprogramm | Kind::Date => return None,
     Kind::Number => match (command.lower_bound(), command.upper_bound()) {
       (Some(lower), Some(upper)) => vec![lower, upper],
       // Without bounds, out-of-range values would wrap around silently in `Command::set`.
@@ -164,6 +193,16 @@ fn writable_problem(command: &Command) -> Option<String> {
   }
 
   None
+}
+
+/// The checks shared by a `[[command]]` and a `[[ferienprogramm]]`; `what` names the entry in the problems.
+fn entry_problems(what: &str, display_name: Option<&String>, interval: Option<u64>, problems: &mut Vec<String>) {
+  if display_name.is_some_and(|display_name| display_name.trim().is_empty()) {
+    problems.push(format!("{what}: display_name must not be empty"));
+  }
+  if interval.is_some_and(|interval| !INTERVALS.contains(&interval)) {
+    problems.push(format!("{what}: interval must be between 1 second and 1 year"));
+  }
 }
 
 impl Config {
@@ -204,8 +243,8 @@ impl Config {
       // Both would use `<prefix>/status`: the Bridge's Availability and Home Assistant's birth message.
       problems.push("mqtt.topic_prefix and homeassistant.discovery_prefix must differ".to_owned());
     }
-    if self.commands.is_empty() {
-      problems.push("no [[command]] is configured".to_owned());
+    if self.commands.is_empty() && self.ferienprogramme.is_empty() {
+      problems.push("no [[command]] or [[ferienprogramm]] is configured".to_owned());
     }
 
     let mut names = HashSet::new();
@@ -230,18 +269,15 @@ impl Config {
       if name == "status" || name.contains(['+', '#', '/']) || !object_ids.insert(topics::object_id(name)) {
         problems.push(format!("command {name:?} cannot be used as a topic or discovery id"));
       }
-      if payload::kind(command) == Kind::Complex {
-        problems.push(format!("command {name:?} has a complex type and cannot be polled"));
+      match payload::kind(command) {
+        Kind::Complex => problems.push(format!("command {name:?} has a complex type and cannot be polled")),
+        Kind::Date => problems.push(format!("command {name:?} is a date, polled only through a [[ferienprogramm]]")),
+        _ => (),
       }
       if !command.access_mode().is_read() {
         problems.push(format!("command {name:?} cannot be read"));
       }
-      if config.display_name.as_ref().is_some_and(|display_name| display_name.trim().is_empty()) {
-        problems.push(format!("command {name:?}: display_name must not be empty"));
-      }
-      if config.interval.is_some_and(|interval| !INTERVALS.contains(&interval)) {
-        problems.push(format!("command {name:?}: interval must be between 1 second and 1 year"));
-      }
+      entry_problems(&format!("command {name:?}"), config.display_name.as_ref(), config.interval, &mut problems);
 
       let writable = self.writable.contains(name);
       if writable && let Some(problem) = writable_problem(command) {
@@ -251,7 +287,47 @@ impl Config {
       commands.push(Polled {
         name: name.clone(),
         display_name: config.display_name.clone().unwrap_or_else(|| name.clone()),
-        command,
+        source: Source::Command(command),
+        interval: Duration::from_secs(config.interval.unwrap_or(self.poll_interval)),
+        writable,
+      });
+    }
+
+    for config in &self.ferienprogramme {
+      let id = &config.id;
+
+      if !topics::is_valid_id(id) || id == "status" {
+        problems.push(format!("ferienprogramm id {id:?} must match [a-zA-Z0-9_-]+ and not be \"status\""));
+      } else if !names.insert(id.as_str()) || !object_ids.insert(topics::object_id(id)) {
+        problems.push(format!("ferienprogramm id {id:?} is already used by a command or another ferienprogramm"));
+      }
+      entry_problems(&format!("ferienprogramm {id:?}"), config.display_name.as_ref(), config.interval, &mut problems);
+
+      let writable = self.writable.contains(id);
+      for name in [&config.start, &config.end] {
+        match device.command(name) {
+          None => {
+            problems.push(format!("ferienprogramm {id:?}: command {name:?} is unknown on device {}", device.name()))
+          },
+          Some(command) if payload::kind(command) != Kind::Date => {
+            problems.push(format!("ferienprogramm {id:?}: command {name:?} is not a date"));
+          },
+          Some(command) if !command.access_mode().is_read() => {
+            problems.push(format!("ferienprogramm {id:?}: command {name:?} cannot be read"));
+          },
+          Some(command) if writable => {
+            if let Some(problem) = writable_problem(command) {
+              problems.push(format!("ferienprogramm {id:?} cannot be writable: {name:?}: {problem}"));
+            }
+          },
+          Some(_) => (),
+        }
+      }
+
+      commands.push(Polled {
+        name: id.clone(),
+        display_name: config.display_name.clone().unwrap_or_else(|| id.clone()),
+        source: Source::Ferienprogramm { start: config.start.clone(), end: config.end.clone() },
         interval: Duration::from_secs(config.interval.unwrap_or(self.poll_interval)),
         writable,
       });
@@ -259,7 +335,7 @@ impl Config {
 
     for name in &self.writable {
       if !names.contains(name.as_str()) {
-        problems.push(format!("writable command {name:?} is not also a [[command]]"));
+        problems.push(format!("writable {name:?} is neither a [[command]] nor the id of a [[ferienprogramm]]"));
       }
     }
 
@@ -358,7 +434,7 @@ pub mod tests {
       (setpoint.name.as_str(), setpoint.interval, setpoint.writable),
       ("Bedien_WW_Solltemperatur", Duration::from_secs(60), true)
     );
-    assert!(std::ptr::eq(setpoint.command, command("Bedien_WW_Solltemperatur")));
+    assert_eq!(setpoint.source, Source::Command(command("Bedien_WW_Solltemperatur")));
     assert_eq!((temperature.interval, temperature.writable), (Duration::from_secs(3600), false));
     assert_eq!(
       (setpoint.display_name.as_str(), temperature.display_name.as_str()),
@@ -436,10 +512,95 @@ pub mod tests {
   }
 
   #[test]
-  fn refuses_complex_types() {
-    for name in ["Uhrzeit", "Schaltzeiten_A1M1_HK", "ecnsysEventType~Error"] {
-      assert!(problem("", &[name]).contains("complex type"), "{name}");
+  fn refuses_complex_types_other_than_those_of_the_bridge() {
+    for name in ["ecnsysEventType~Error", "device_id_f0"] {
+      assert!(!problems(&toml("", &[name])).is_empty(), "{name}");
     }
+    assert!(problem("", &["ecnsysEventType~Error"]).contains("complex type"));
+    assert!(problem("", &["FerienBeginnA1M1"]).contains("only through a [[ferienprogramm]]"));
+  }
+
+  #[test]
+  fn accepts_zeitprogramme_uhrzeit_and_stoerungsmeldungen() {
+    let names =
+      ["Schaltzeiten_A1M1_HK", "Schaltzeiten_A1M1_WW", "Schaltzeiten_A1M1_ZP", "Uhrzeit", "ecnsysEventType~ErrorIndex"];
+    assert_eq!(checked("", &names).commands().len(), 5);
+
+    let zeitprogramme = &names[..3];
+    let writable = format!("writable = {zeitprogramme:?}");
+    assert!(checked(&writable, zeitprogramme).commands().iter().all(|polled| polled.writable));
+  }
+
+  #[test]
+  fn refuses_writable_uhrzeit_and_stoerungsmeldungen() {
+    for name in ["Uhrzeit", "ecnsysEventType~ErrorIndex"] {
+      assert!(problem(&format!("writable = [\"{name}\"]"), &[name]).contains("cannot be writable"), "{name}");
+    }
+  }
+
+  const FERIENPROGRAMM: &str =
+    "[[ferienprogramm]]\nid = \"ferienprogramm_hk1\"\nstart = \"FerienBeginnA1M1\"\nend = \"FerienEndeA1M1\"\n";
+
+  #[test]
+  fn ferienprogramm() {
+    let config = toml("writable = [\"ferienprogramm_hk1\"]", &["ADC_Isttemperaturwert_2"])
+      + FERIENPROGRAMM
+      + "display_name = \"Ferienprogramm\"\ninterval = 3600\n";
+    let checked = Config::parse(&config, None).unwrap().check(device()).unwrap();
+    let [_, ferien] = checked.commands() else { panic!() };
+    assert_eq!((ferien.name.as_str(), ferien.display_name.as_str()), ("ferienprogramm_hk1", "Ferienprogramm"));
+    assert_eq!(
+      ferien.source,
+      Source::Ferienprogramm { start: "FerienBeginnA1M1".into(), end: "FerienEndeA1M1".into() }
+    );
+    assert_eq!((ferien.interval, ferien.writable), (Duration::from_secs(3600), true));
+
+    // Not writable, default display name and interval.
+    let config = toml("", &["ADC_Isttemperaturwert_2"]) + FERIENPROGRAMM;
+    let checked = Config::parse(&config, None).unwrap().check(device()).unwrap();
+    let ferien = &checked.commands()[1];
+    assert_eq!(
+      (ferien.display_name.as_str(), ferien.interval, ferien.writable),
+      ("ferienprogramm_hk1", Duration::from_secs(60), false)
+    );
+  }
+
+  #[test]
+  fn refuses_bad_ferienprogramme() {
+    let one = |top: &str, ferien: &str| {
+      let problems = problems(&(toml(top, &["ADC_Isttemperaturwert_2"]) + ferien));
+      assert_eq!(problems.len(), 1, "{problems:?}");
+      problems.into_iter().next().unwrap()
+    };
+    let with = |from: &str, to: &str| FERIENPROGRAMM.replace(from, to);
+
+    assert!(one("", &with("FerienEndeA1M1", "Nope")).contains("unknown on device"));
+    assert!(one("", &with("FerienEndeA1M1", "Uhrzeit")).contains("not a date"));
+    assert!(one("", &with("ferienprogramm_hk1", "ferien hk1")).contains("must match"));
+    assert!(one("", &with("ferienprogramm_hk1", "status")).contains("must match"));
+    assert!(one("", &with("ferienprogramm_hk1", "ADC_Isttemperaturwert_2")).contains("already used"));
+    assert!(one("", &format!("{FERIENPROGRAMM}{FERIENPROGRAMM}")).contains("already used"));
+    assert!(one("", &format!("{FERIENPROGRAMM}display_name = \"\"")).contains("display_name"));
+    assert!(one("", &format!("{FERIENPROGRAMM}interval = 0")).contains("interval"));
+    assert!(one("writable = [\"ferien\"]", FERIENPROGRAMM).contains("neither a [[command]] nor the id"));
+    assert!(Config::parse(&(toml("", &[]) + FERIENPROGRAMM + "name = \"x\""), None).is_err());
+  }
+
+  #[test]
+  fn writable_ferienprogramm_needs_write_access_to_both_dates() {
+    // A date the controller only lets you read, on another Device.
+    let device = &vcontrol::device::VITOTWINGW_BATI;
+    let (name, _) = device
+      .commands()
+      .entries()
+      .find(|(_, command)| payload::kind(command) == Kind::Date && !command.access_mode().is_write())
+      .unwrap();
+    let toml = format!(
+      "poll_interval = 60\nwritable = [\"f\"]\n[optolink]\nport = 1\n[mqtt]\nhost = \"h\"\n[[ferienprogramm]]\nid = \"f\"\nstart = \"{name}\"\nend = \"{name}\""
+    );
+    let problems = Config::parse(&toml, None).unwrap().check(device).unwrap_err();
+    assert_eq!(problems.len(), 2, "{problems:?}");
+    assert!(problems.iter().all(|problem| problem.contains("does not allow writing")), "{problems:?}");
   }
 
   #[test]
@@ -455,7 +616,7 @@ pub mod tests {
   fn refuses_writable_that_is_not_polled() {
     assert!(
       problem("writable = [\"Bedien_WW_Solltemperatur\"]", &["ADC_Isttemperaturwert_2"])
-        .contains("not also a [[command]]")
+        .contains("neither a [[command]] nor the id")
     );
   }
 
@@ -536,7 +697,7 @@ pub mod tests {
 
   #[test]
   fn reports_every_problem() {
-    assert_eq!(problems(&toml("writable = [\"Other\"]", &["Nope", "Uhrzeit"])).len(), 3);
+    assert_eq!(problems(&toml("writable = [\"Other\"]", &["Nope", "ecnsysEventType~Error"])).len(), 3);
   }
 
   /// No writable candidate of any Device may panic the check.

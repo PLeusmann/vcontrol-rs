@@ -2,15 +2,16 @@
 
 use std::{future::Future, time::Duration};
 
+use chrono::Datelike;
 use rumqttc::{
-  AsyncClient, ConnectionError, Event, EventLoop, LastWill, MqttOptions, Packet, Publish, QoS,
-  TlsConfiguration, Transport,
+  AsyncClient, ConnectionError, Event, EventLoop, LastWill, MqttOptions, Packet, Publish, QoS, TlsConfiguration,
+  Transport,
 };
 use tokio::time::{Instant, sleep_until, timeout};
-use vcontrol::Value;
+use vcontrol::{Value, types::Date};
 
 use crate::{
-  config::Checked,
+  config::{Checked, Source},
   controller::{Controller, Failure},
   discovery, payload,
   schedule::{Failures, Schedule},
@@ -156,23 +157,59 @@ impl<C: Controller> Bridge<C> {
     }
   }
 
-  /// Reads one Command and publishes its value.
-  async fn read(&mut self, index: usize) -> Result<(), Exit> {
-    let polled = &self.config.commands()[index];
-    let (name, command) = (polled.name.clone(), polled.command);
-    self.schedule.started(index, Instant::now());
+  /// Reads a Command and returns its value, or `None` if this call failed.
+  async fn get(&mut self, name: &str) -> Result<Option<Value>, Exit> {
+    let result = self.controller.get(name).await;
+    self.check(name, result)
+  }
 
-    let result = self.controller.get(&name).await;
-    let Some(value) = self.check(&name, result)? else { return Ok(()) };
+  /// Reads one Command, or both dates of a Ferienprogramm, and publishes the value.
+  async fn read(&mut self, index: usize) -> Result<(), Exit> {
+    self.schedule.started(index, Instant::now());
+    let polled = &self.config.commands()[index];
+    let name = polled.name.clone();
+
+    let payload = match &polled.source {
+      Source::Command(command) => {
+        let command = *command;
+        let Some(value) = self.get(&name).await? else { return Ok(()) };
+        payload::state(command, &value, self.controller.device()).ok_or(value)
+      },
+      Source::Ferienprogramm { start, end } => {
+        let (start, end) = (start.clone(), end.clone());
+        let Some(start) = self.get(&start).await? else { return Ok(()) };
+        let Some(end) = self.get(&end).await? else { return Ok(()) };
+        payload::ferienprogramm_state(&start, &end).ok_or(Value::Array(vec![start, end]))
+      },
+    };
 
     // While the broker is away nothing drains the channel; queued values would crowd out what a ConnAck sends.
     if self.connected {
-      match payload::state(command, &value) {
-        Some(payload) => self.publish(topics::state(&self.config.mqtt().topic_prefix, &name), &payload),
-        None => log::warn!("{name}: cannot publish {value:?}"),
+      match payload {
+        Ok(payload) => self.publish(topics::state(&self.config.mqtt().topic_prefix, &name), &payload),
+        Err(value) => log::warn!("{name}: cannot publish {value:?}"),
       }
     }
     Ok(())
+  }
+
+  /// The writes for a validated `/set` payload, in the order they must happen.
+  fn writes(name: &str, source: &Source, payload: &[u8]) -> Result<Vec<(String, Value)>, String> {
+    match source {
+      Source::Command(command) => Ok(vec![(name.to_owned(), payload::parse_write(command, payload)?)]),
+      Source::Ferienprogramm { start, end } => {
+        let now = chrono::Local::now();
+        let today = Date::new(now.year() as u16, now.month() as u8, now.day() as u8).expect("valid date");
+        // As long as the end is 1970-01-01 there is no holiday operation, so nothing starts before the second write.
+        Ok(match payload::parse_ferienprogramm(payload, today)? {
+          Some((from, to)) => vec![(start.clone(), Value::Date(from)), (end.clone(), Value::Date(to))],
+          None => {
+            let none = Value::Date(payload::no_holiday());
+            vec![(end.clone(), none.clone()), (start.clone(), none)]
+          },
+        })
+      },
+    }
   }
 
   /// The trust boundary: every incoming message passes through here. Failures are logged and dropped.
@@ -195,23 +232,34 @@ impl<C: Controller> Bridge<C> {
       log::warn!("Rejected write on {topic}: {name} is not a Writable Command.");
       return Ok(());
     };
-    let value: Value = match payload::parse_write(self.config.commands()[index].command, &message.payload) {
-      Ok(value) => value,
+    let source = &self.config.commands()[index].source;
+    let writes = match Self::writes(name, source, &message.payload) {
+      Ok(writes) => writes,
       Err(reason) => {
         log::warn!("Rejected write on {topic}: {reason}.");
         return Ok(());
       },
     };
+    // A Zeitprogramm (7 telegrams) or a Ferienprogramm (2 Commands) may be written in part when a call fails.
+    let may_be_partial =
+      !matches!(source, Source::Command(command) if payload::kind(command) != payload::Kind::Zeitprogramm);
 
     if self.read_only {
-      log::info!("Read-only mode: would write {name} = {value:?} (from {topic}).");
+      for (command, value) in writes {
+        log::info!("Read-only mode: would write {command} = {value:?} (from {topic}).");
+      }
       return Ok(());
     }
 
-    log::info!("Writing {name} = {value:?} (from {topic}).");
-    let result = self.controller.set(name, value).await;
-    if self.check(name, result)?.is_none() {
-      return Ok(());
+    for (command, value) in writes {
+      log::info!("Writing {command} = {value:?} (from {topic}).");
+      let result = self.controller.set(&command, value).await;
+      if self.check(&command, result)?.is_none() {
+        if !may_be_partial {
+          return Ok(());
+        }
+        break;
+      }
     }
 
     // Publish what the controller actually has.
@@ -932,6 +980,168 @@ mod tests {
       let requests: Vec<Request> = bridge.requests.try_iter().collect();
       assert!(matches!(&requests[0], Request::Publish(publish) if publish.payload == "offline"));
       assert!(matches!(&requests[1], Request::Disconnect(_)));
+    })
+    .await
+  }
+
+  const START: &str = "FerienBeginnA1M1";
+  const END: &str = "FerienEndeA1M1";
+  const ZEITPROGRAMM: &str = "Schaltzeiten_A1M1_HK";
+
+  fn date(text: &str) -> Value {
+    Value::Date(text.parse().unwrap())
+  }
+
+  /// A Bridge with a writable Ferienprogramm and a writable Zeitprogramm, no Ferienprogramm set.
+  fn start_complex(read_only: bool) -> Harness {
+    let toml = format!(
+      "poll_interval = 60\nwritable = [\"ferien\", \"{ZEITPROGRAMM}\"]\n[optolink]\nport = 1\n[mqtt]\nhost = \"h\"\n\
+       [[command]]\nname = \"{ZEITPROGRAMM}\"\n[[ferienprogramm]]\nid = \"ferien\"\nstart = \"{START}\"\nend = \"{END}\"\n"
+    );
+    let config = Config::parse(&toml, None).unwrap().check(device()).unwrap();
+    let fake = Fake::default();
+    fake.state().values.insert(START.into(), date("1970-01-01"));
+    fake.state().values.insert(END.into(), date("1970-01-01"));
+    Harness::start_with(config, read_only, 100, fake)
+  }
+
+  async fn connected(bridge: &Harness) {
+    bridge.send(connack());
+    sleep(Duration::from_secs(1)).await;
+    bridge.fake.state().calls.clear();
+    bridge.published();
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn ferienprogramm_is_read_from_both_dates_and_published_as_one() {
+    local(async {
+      let bridge = start_complex(false);
+      bridge.send(connack());
+      sleep(Duration::from_secs(1)).await;
+      assert_eq!((bridge.fake.gets(START), bridge.fake.gets(END)), (1, 1));
+      assert!(bridge.states().contains(&pair("ferien", "None")));
+
+      bridge.fake.state().values.insert(START.into(), date("2026-12-20"));
+      bridge.fake.state().values.insert(END.into(), date("2027-01-06"));
+      sleep(Duration::from_secs(60)).await;
+      assert!(bridge.states().contains(&pair("ferien", "2026-12-20/2027-01-06")));
+    })
+    .await
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn ferienprogramm_is_set_start_first_and_ended_end_first() {
+    local(async {
+      let bridge = start_complex(false);
+      connected(&bridge).await;
+
+      // The test runs on today's date; a holiday ending far in the future is always valid.
+      bridge.send(message("vcontrol/ferien/set", "2026-12-20/2999-01-06"));
+      sleep(Duration::from_secs(1)).await;
+      assert_eq!(
+        bridge.fake.state().calls,
+        [
+          Call::Set(START.into(), date("2026-12-20")),
+          Call::Set(END.into(), date("2999-01-06")),
+          Call::Get(START.into()),
+          Call::Get(END.into()),
+        ]
+      );
+      assert_eq!(bridge.states(), [pair("ferien", "2026-12-20/2999-01-06")]);
+
+      bridge.fake.state().calls.clear();
+      bridge.send(message("vcontrol/ferien/set", "None"));
+      sleep(Duration::from_secs(1)).await;
+      assert_eq!(
+        bridge.fake.sets(),
+        [Call::Set(END.into(), date("1970-01-01")), Call::Set(START.into(), date("1970-01-01"))]
+      );
+      assert_eq!(bridge.states(), [pair("ferien", "None")]);
+    })
+    .await
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn ferienprogramm_failing_on_the_second_date_is_read_back() {
+    local(async {
+      let bridge = start_complex(false);
+      connected(&bridge).await;
+      bridge.fake.state().failing.insert(END.into());
+
+      bridge.send(message("vcontrol/ferien/set", "2026-12-20/2999-01-06"));
+      sleep(Duration::from_secs(1)).await;
+      let calls = bridge.fake.state().calls.clone();
+      assert_eq!(
+        calls[..3],
+        [
+          Call::Set(START.into(), date("2026-12-20")),
+          Call::Set(END.into(), date("2999-01-06")),
+          Call::Get(START.into())
+        ]
+      );
+      assert!(!bridge.task.is_finished());
+    })
+    .await
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn invalid_ferienprogramm_and_zeitprogramm_writes_are_dropped() {
+    local(async {
+      let bridge = start_complex(false);
+      connected(&bridge).await;
+
+      for payload in ["2027-01-06/2026-12-20", "2000-01-01/2000-01-02", "2026-12-20", "", "nonsense"] {
+        bridge.send(message("vcontrol/ferien/set", payload));
+      }
+      for payload in ["{}", "None", r#"{"mon":[{"from":"05:35","to":"22:30"},null,null,null]}"#] {
+        bridge.send(message(&format!("vcontrol/{ZEITPROGRAMM}/set"), payload));
+      }
+      sleep(Duration::from_secs(1)).await;
+      assert_eq!(bridge.fake.sets(), []);
+      assert!(!bridge.task.is_finished());
+    })
+    .await
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn read_only_mode_never_writes_a_ferienprogramm() {
+    local(async {
+      let bridge = start_complex(true);
+      connected(&bridge).await;
+      bridge.send(message("vcontrol/ferien/set", "2026-12-20/2999-01-06"));
+      sleep(Duration::from_secs(1)).await;
+      assert_eq!(bridge.fake.state().calls, []);
+    })
+    .await
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn zeitprogramm_is_written_and_read_back() {
+    local(async {
+      let bridge = start_complex(false);
+      connected(&bridge).await;
+
+      let week = r#"{"mon":[{"from":"05:30","to":"22:30"},null,null,null],"tue":[null,null,null,null],"wed":[null,null,null,null],"thu":[null,null,null,null],"fri":[null,null,null,null],"sat":[null,null,null,null],"sun":[null,null,null,null]}"#;
+      bridge.send(message(&format!("vcontrol/{ZEITPROGRAMM}/set"), week));
+      sleep(Duration::from_secs(1)).await;
+      assert_eq!(bridge.fake.sets().len(), 1);
+      assert_eq!(bridge.states(), [pair(ZEITPROGRAMM, week)]);
+    })
+    .await
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn failed_zeitprogramm_write_is_read_back() {
+    local(async {
+      let bridge = start_complex(false);
+      connected(&bridge).await;
+      bridge.fake.state().failing.insert(ZEITPROGRAMM.into());
+
+      let week = r#"{"mon":[null,null,null,null],"tue":[null,null,null,null],"wed":[null,null,null,null],"thu":[null,null,null,null],"fri":[null,null,null,null],"sat":[null,null,null,null],"sun":[null,null,null,null]}"#;
+      bridge.send(message(&format!("vcontrol/{ZEITPROGRAMM}/set"), week));
+      sleep(Duration::from_secs(1)).await;
+      // Days before the failing one may already be written.
+      assert_eq!(bridge.fake.gets(ZEITPROGRAMM), 1);
     })
     .await
   }

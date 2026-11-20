@@ -83,7 +83,7 @@ name = "Bedien_WW_Solltemperatur"
 | Key | Required | Meaning |
 |---|---|---|
 | `poll_interval` | yes | How often each command is read, in whole seconds. |
-| `writable` | no | Names of the commands that may be written from MQTT. Each must also have a `[[command]]` entry. |
+| `writable` | no | Names of the commands that may be written from MQTT. Each must also have a `[[command]]` entry, or be the `id` of a `[[ferienprogramm]]`. |
 
 ### `[optolink]`
 
@@ -130,7 +130,36 @@ One entry for each command to read.
 | `display_name` | no | Entity name in Home Assistant, instead of `name`. Topics and entity ids still use `name`, so changing it later keeps the entity and its history. |
 | `interval` | no | Seconds between reads of this command, instead of `poll_interval`. Use a long interval for values that rarely change. |
 
-Only commands with simple values can be used: numbers, texts and values with named states. Schedules, dates, error lists and byte arrays are not supported.
+Commands with numbers, texts and values with named states can be used, and these complex values:
+
+| Value | Example command | Payload | Writable |
+|---|---|---|---|
+| Zeitprogramm (weekly schedule) | `Schaltzeiten_A1M1_HK` | JSON, seven days with four Zeitphasen each, `null` for an unused one: `{"mon":[{"from":"05:30","to":"22:30"},null,null,null],"tue":[…],…,"sun":[…]}` | yes |
+| Uhrzeit (controller clock) | `Uhrzeit` | local date and time without time zone: `2026-11-19T13:54:39` | no |
+| Störungsmeldungen (pending faults) | `ecnsysEventType~ErrorIndex` | JSON list, `[]` if none: `[{"code":"F4","text":"…"}]`; `text` is left out for unknown codes | no |
+
+Dates of a Ferienprogramm are not configured as `[[command]]` but as a pair, see below. The Störungsspeicher (error history), device ids and byte arrays are not supported.
+
+### `[[ferienprogramm]]`
+
+One entity for a holiday period, from the controller's two date commands for start and end.
+
+```toml
+[[ferienprogramm]]
+id = "ferienprogramm_hk1"
+display_name = "Ferienprogramm"
+start = "FerienBeginnA1M1"
+end = "FerienEndeA1M1"
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `id` | yes | Name of the entity in topics, Home Assistant ids and `writable`. Only letters, digits, `_` and `-`; must differ from all command names. |
+| `display_name` | no | Entity name in Home Assistant, instead of `id`. |
+| `start`, `end` | yes | The date commands for the first and the last day. |
+| `interval` | no | Seconds between reads, instead of `poll_interval`. |
+
+The payload is `start/end`, e.g. `2026-12-20/2027-01-06`, or `None` when no Ferienprogramm is set (the controller then reports `1970-01-01` for both).
 
 ## Run
 
@@ -171,6 +200,7 @@ Values:
 - Numbers are published without their unit, e.g. `21.5`.
 - Commands with named states publish the name, e.g. `Cylinder priority`. If several numbers share one name, the number is appended: `Modulating priority (4)`.
 - `None` means the controller has no valid value at the moment.
+- Zeitprogramme, Uhrzeit, Störungsmeldungen and the Ferienprogramm as described in [`[[command]]`](#command) and [`[[ferienprogramm]]`](#ferienprogramm).
 
 Try it with the mosquitto tools:
 
@@ -185,6 +215,8 @@ A command accepts writes only if it is listed in `writable`. Each write is check
 
 - A number must be within the command's limits and must be a value the controller can store. A command that counts in steps of 5 rejects `9`.
 - A command with named states accepts one of its names, or the number behind a name.
+- A Zeitprogramm replaces the whole week. Times must be on the 10-minute grid and not after `24:00`, each Zeitphase must end after it starts, and the Zeitphasen of a day must be in order without overlapping. The controller gets the week one day at a time, so a write that fails half-way leaves the first days written; the program reads back and publishes what the controller has.
+- A Ferienprogramm takes `start/end` or `None`. The start must not be after the end, and the end must not be before today. To set one, the start is written before the end; to end one, the end is set to `1970-01-01` before the start, so holiday operation never starts by accident in between.
 - Retained messages are ignored. Publish to `/set` topics without the retain flag.
 
 A rejected write is logged with the reason and changes nothing. After a successful write, the program reads the value back and publishes what the controller now has.
@@ -193,7 +225,7 @@ Not every command can be made writable. The program refuses to start if a comman
 
 - is read-only on the controller,
 - is a number without known limits,
-- is a text,
+- is a text, an Uhrzeit or Störungsmeldungen,
 - is a single flag that shares its byte with other flags on the controller,
 - has a value that cannot be converted back for writing.
 
@@ -208,6 +240,9 @@ With the MQTT integration set up in Home Assistant, the controller appears as on
 | not in `writable` | sensor |
 | in `writable`, a number | number, with minimum, maximum and step |
 | in `writable`, with named states | select |
+| Zeitprogramm | sensor showing today's Zeitphasen (e.g. `05:30–22:30`), with the week in its attributes; write it on its `/set` topic |
+| Störungsmeldungen | sensor showing the number of pending Störungen, with the list in its attributes |
+| Ferienprogramm in `writable` | text, accepting `start/end` or `None` |
 
 Entities become unavailable while the program is not running. If you change the list of commands, old entities stay in Home Assistant until you delete them there.
 
@@ -247,6 +282,7 @@ The program ends with an exit code that tells what happened:
 | `command "..." is unknown on device ...` | The name does not exist on your controller model. Check it with `vcontrol cat`. |
 | `command "..." cannot be writable: ...` | See [Writing values](#writing-values). Remove it from `writable`. |
 | `Optolink: ... timed out` or `Permission denied` at start | Wrong device path, another program is using the adapter, or the user may not open the serial device. The systemd unit runs with the `dialout` group. |
+| `... is in use by another process` | The bridge or the `vcontrol` command line tool already has the adapter open. Only one can use it at a time: stop the service (`sudo systemctl stop vcontrol-mqtt`) before you use `vcontrol`. |
 | The service restarts again and again | The controller does not answer. Check the position of the Optolink adapter on the controller. |
 | `MQTT: ...` warnings in the log | The broker is unreachable or refuses the login. The program keeps trying every 5 seconds and keeps reading the controller. |
 | `Rejected write on ...` | The value was outside the limits, not storable, or not a known name. The log line gives the reason. |

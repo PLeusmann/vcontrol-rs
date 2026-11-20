@@ -2,8 +2,8 @@
 # Installed as /etc/vcontrol/vcontrol-mqtt.toml; your edits survive package upgrades.
 # Set up [mqtt] below; the broker password goes into /etc/vcontrol/vcontrol-mqtt.env (VCONTROL_MQTT_PASSWORD=...).
 # Command names are those of `vcontrol cat`; on another controller model, replace the commands below.
-# Left out: coding addresses (Kxx, set by the installer), static ids, and complex types
-# (Uhrzeit, error list, holiday dates, device_id), which the bridge cannot poll.
+# Left out: coding addresses (Kxx, set by the installer), static ids, and the complex types the bridge
+# cannot poll (Störungsspeicher, device_id).
 # Options shown commented out are optional; their value is the default unless noted.
 
 poll_interval = 60             # seconds, for every command without its own `interval`
@@ -226,3 +226,41 @@ interval = 300
 name = "VorlauftemperaturstatusA1M1"
 display_name = "Fühlerstatus Vorlauf"
 interval = 300
+
+# --- Zeitprogramme, Ferienprogramm, Uhrzeit, Störungsmeldungen ---
+# Not yet in the prepared `writable` list: writing them waits for scripts/device-test-complex-types.sh.
+
+[[command]]
+name = "Schaltzeiten_A1M1_HK"
+display_name = "Zeitprogramm Heizkreis"
+interval = 3600
+
+[[command]]
+name = "Schaltzeiten_A1M1_WW"
+display_name = "Zeitprogramm Trinkwassererwärmung"
+interval = 3600
+
+[[command]]
+name = "Schaltzeiten_A1M1_ZP"
+display_name = "Zeitprogramm Zirkulationspumpe"
+interval = 3600
+
+[[command]]
+name = "Uhrzeit"
+interval = 3600
+
+[[command]]
+name = "ecnsysEventType~ErrorIndex"
+display_name = "Störungsmeldungen"
+
+# One entity from the start and end date. Each [[ferienprogramm]] takes:
+# id = "..."                   # required; used in topics, discovery ids and `writable` instead of a command name
+# display_name = "..."         # default: id
+# start = "...", end = "..."   # required: the two date commands
+# interval = 300               # default: poll_interval
+[[ferienprogramm]]
+id = "ferienprogramm_hk1"
+display_name = "Ferienprogramm"
+start = "FerienBeginnA1M1"
+end = "FerienEndeA1M1"
+interval = 3600
