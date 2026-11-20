@@ -1,0 +1,49 @@
+// openHAB generic MQTT Thing for vcontrol-mqtt with dist/config/vitotronic-200-ko2b.toml.
+// Use this while the Home Assistant binding cannot read the bridge's discovery messages
+// (openHAB 5.2: openhab/openhab-addons#22073). Do not use both: they would create two Things.
+//
+// Copy to $OPENHAB_CONF/things/vcontrol.things and replace `mqtt:broker:mosquitto` with the UID of your
+// MQTT broker Thing. All channels are read-only, like the config (`writable = []`).
+// Generated from the bridge's discovery messages; regenerate when the [[command]] list changes.
+// A command without a value publishes `None`; number and switch channels log a warning for it and keep their state.
+
+Thing mqtt:topic:vcontrol "V200KO2B" (mqtt:broker:mosquitto) [ availabilityTopic="vcontrol/status", payloadAvailable="online", payloadNotAvailable="offline" ] {
+  Channels:
+    Type number : aussentemperatur "Außentemperatur" [ stateTopic="vcontrol/ADC_IstTemperaturwert_ATS", unit="°C" ]
+    Type number : aussentemperatur_gedaempft "Außentemperatur gedämpft" [ stateTopic="vcontrol/TiefpassTemperaturwert_ATS", unit="°C" ]
+    Type number : gemischte_aussentemperatur "Gemischte Außentemperatur" [ stateTopic="vcontrol/Gemischte_AT", unit="°C" ]
+    Type number : kesselwassertemperatur "Kesselwassertemperatur" [ stateTopic="vcontrol/ADC_Isttemperaturwert_KTS", unit="°C" ]
+    Type number : kesselwassertemperatur_gedaempft "Kesselwassertemperatur gedämpft" [ stateTopic="vcontrol/TiefpassTemperaturwert_KTS", unit="°C" ]
+    Type number : fuehler_2_kessel_anlagenvorlauf "Fühler 2 (Kessel-/Anlagenvorlauf)" [ stateTopic="vcontrol/ADC_Isttemperaturwert_2", unit="°C" ]
+    Type number : vorlauftemperatur "Vorlauftemperatur" [ stateTopic="vcontrol/VorlauftemperaturM1", unit="°C" ]
+    Type number : trinkwassertemperatur "Trinkwassertemperatur" [ stateTopic="vcontrol/ADC_IstTemperaturwert_STS1", unit="°C" ]
+    Type number : trinkwassertemperatur_gedaempft "Trinkwassertemperatur gedämpft" [ stateTopic="vcontrol/TiefpassTemperaturwert_STS1", unit="°C" ]
+    Type number : vorlauftemperatur_sollwert "Vorlauftemperatur-Sollwert" [ stateTopic="vcontrol/VT_SolltemperaturA1M1", unit="°C" ]
+    Type number : kesselwassertemperatur_sollwert "Kesselwassertemperatur-Sollwert" [ stateTopic="vcontrol/VT_SollKesselA1M1_NR1", unit="°C" ]
+    Type number : raumtemperatur_sollwert_aktuell "Raumtemperatur-Sollwert aktuell" [ stateTopic="vcontrol/HK_RaumsolltemperaturaktuellA1M1", unit="°C" ]
+    Type number : trinkwassertemperatur_sollwert_aktuell "Trinkwassertemperatur-Sollwert aktuell" [ stateTopic="vcontrol/WW_SolltemperaturAktuell", unit="°C" ]
+    Type string : betriebsart "Betriebsart" [ stateTopic="vcontrol/HK_AktuelleBetriebsartA1M1" ]
+    Type string : status_warmwasserbereitung "Status Warmwasserbereitung" [ stateTopic="vcontrol/WW_Status_NR2" ]
+    Type number : trinkwassertemperatur_sollwert "Trinkwassertemperatur-Sollwert" [ stateTopic="vcontrol/Bedien_WW_Solltemperatur", unit="°C" ]
+    Type number : raumtemperatur_soll "Raumtemperatur Soll" [ stateTopic="vcontrol/BedienRTSolltemperaturA1M1", unit="°C" ]
+    Type number : reduzierte_raumtemperatur_soll "Reduzierte Raumtemperatur Soll" [ stateTopic="vcontrol/BedienRTSolltemperaturReduziertA1M1", unit="°C" ]
+    Type number : party_raumtemperatur_soll "Party-Raumtemperatur Soll" [ stateTopic="vcontrol/BedienRTSoll_PartyA1M1", unit="°C" ]
+    Type string : betriebsprogramm "Betriebsprogramm" [ stateTopic="vcontrol/BedienteilBA_GWGA1" ]
+    Type switch : partybetrieb "Partybetrieb" [ stateTopic="vcontrol/NRx_PartybetriebA1M1_D", on="on", off="off" ]
+    Type switch : sparbetrieb "Sparbetrieb" [ stateTopic="vcontrol/NRx_SparbetriebA1M1_D", on="on", off="off" ]
+    Type string : ferienprogramm "Ferienbetrieb aktiv" [ stateTopic="vcontrol/HK_FerienbetriebA1M1" ]
+    Type number : neigung_heizkennlinie "Neigung Heizkennlinie" [ stateTopic="vcontrol/KD3_KonfiNeigungA1" ]
+    Type number : niveau_heizkennlinie "Niveau Heizkennlinie" [ stateTopic="vcontrol/KD4_KonfiNiveauA1" ]  // K is a temperature difference here; openHAB would read it as absolute Kelvin
+    Type switch : brenner "Brenner" [ stateTopic="vcontrol/DigitalAusgang_Brenner", on="on", off="off" ]
+    Type switch : heizkreispumpe "Heizkreispumpe" [ stateTopic="vcontrol/HK_PumpenzustandA1M1", on="on", off="off" ]
+    Type switch : speicherladepumpe "Speicherladepumpe" [ stateTopic="vcontrol/DigitalAusgang_Speicherladepumpe", on="on", off="off" ]
+    Type switch : zirkulationspumpe "Zirkulationspumpe" [ stateTopic="vcontrol/DigitalAusgang_Zirkulationspumpe", on="on", off="off" ]
+    Type number : brennstoffverbrauch "Brennstoffverbrauch" [ stateTopic="vcontrol/Oelverbrauch", unit="l" ]
+    Type number : brennerbetriebsstunden "Brennerbetriebsstunden" [ stateTopic="vcontrol/BetriebsstundenBrenner1", unit="h" ]
+    Type number : brennerstarts "Brennerstarts" [ stateTopic="vcontrol/Brennerstarts" ]
+    Type number : brennstoffverbrauch_brenner "Brennstoffverbrauch Brenner" [ stateTopic="vcontrol/K26_KonfiVerbrauchBrenner1GWG" ]
+    Type string : frostgefahr "Frostgefahr" [ stateTopic="vcontrol/HK_Frostgefahr_aktivA1M1" ]
+    Type string : fuehlerstatus_aussentemperatur "Fühlerstatus Außentemperatur" [ stateTopic="vcontrol/TemperaturFehler_ATS" ]
+    Type string : fuehlerstatus_speicher "Fühlerstatus Speicher" [ stateTopic="vcontrol/TemperaturFehler_STS1" ]
+    Type string : fuehlerstatus_vorlauf "Fühlerstatus Vorlauf" [ stateTopic="vcontrol/VorlauftemperaturstatusA1M1" ]
+}
