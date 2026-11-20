@@ -31,10 +31,9 @@ The `justfile` runs everything in the devcontainer, which it builds and starts i
 ### Install on the Pi
 
 ```sh
-scp target/dist/armv7-unknown-linux-musleabihf/vcontrol-rs_*.deb pi@raspberrypi:/tmp/
-
-# On the Pi:
-sudo dpkg -i /tmp/vcontrol-rs_*.deb
+# The latest release (Pi with a 32-bit OS); or copy one from `just dist`.
+curl -fsSLO https://github.com/PLeusmann/vcontrol-rs/releases/latest/download/vcontrol-rs_$(uname -m).deb
+sudo apt install ./vcontrol-rs_$(uname -m).deb
 sudoedit /etc/vcontrol/vcontrol-mqtt.toml   # at least [mqtt] host
 echo 'VCONTROL_MQTT_PASSWORD=...' | sudo install -m 600 /dev/stdin /etc/vcontrol/vcontrol-mqtt.env
 ```

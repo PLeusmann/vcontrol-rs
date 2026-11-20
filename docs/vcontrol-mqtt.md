@@ -14,7 +14,14 @@ Only one program can use the Optolink interface at a time. Stop `vcontrold` or o
 
 ## Install
 
-Build the Debian package in this repository. You need `docker` and `just`; the build runs in the devcontainer, which `just` creates:
+Each `v*` tag publishes the Debian packages on the [releases page](https://github.com/PLeusmann/vcontrol-rs/releases), named after what `uname -m` prints on the Pi (`armv7l` for Pi 2, 3, 4; `armv6l` for Pi 1, Zero). On the Pi, with a 32-bit OS:
+
+```sh
+curl -fsSLO https://github.com/PLeusmann/vcontrol-rs/releases/latest/download/vcontrol-rs_$(uname -m).deb
+sudo apt install ./vcontrol-rs_$(uname -m).deb
+```
+
+Or build the Debian package in this repository. You need `docker` and `just`; the build runs in the devcontainer, which `just` creates:
 
 ```sh
 just dist

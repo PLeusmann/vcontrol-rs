@@ -1,0 +1,30 @@
+on:
+  push:
+    tags: ['v*']
+
+name: Release
+
+permissions:
+  contents: write
+
+jobs:
+  deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same toolchain as `just dist`.
+      - run: docker build -t vcontrol-dev .devcontainer
+
+      # Both packages are named vcontrol-rs_<version>-1_armhf.deb, so the assets are named after `uname -m` on the Pi.
+      - run: |
+          docker run --rm -u root -v "$PWD":/work -w /work vcontrol-dev sh -euc '
+            test "v$(sed -n "s/^version = \"\(.*\)\"/\1/p" Cargo.toml | head -1)" = "${{ github.ref_name }}"
+            mkdir -p release
+            cargo deb --target armv7-unknown-linux-musleabihf --output release/vcontrol-rs_armv7l.deb
+            cargo deb --target arm-unknown-linux-musleabihf --output release/vcontrol-rs_armv6l.deb
+          '
+
+      - run: gh release create "${{ github.ref_name }}" --generate-notes release/*.deb
+        env:
+          GH_TOKEN: ${{ github.token }}
