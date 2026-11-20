@@ -48,7 +48,7 @@ impl FakeController {
     let stored = self.writes.lock().unwrap().iter().rev().find(|(a, _)| *a == addr).map(|(_, data)| data.clone());
     let mut data = stored.unwrap_or_else(|| match addr {
       0x00F8 => vec![0x20, 0x9F, 0, 0, 0, 0, 0, 0], // V200KO2B
-      0x0802 => 215u16.to_le_bytes().to_vec(),       // 21.5 °C
+      0x0802 => 215u16.to_le_bytes().to_vec(),      // 21.5 °C
       SETPOINT_ADDR => vec![50],
       _ => vec![],
     });
@@ -192,7 +192,8 @@ async fn end_to_end(vs2: bool) {
   let dir = std::env::temp_dir().join(format!("vcontrol-mqtt-e2e-{port}"));
   fs::create_dir_all(&dir).unwrap();
 
-  fs::write(dir.join("mosquitto.conf"), format!("listener {port} 127.0.0.1\nallow_anonymous true\nuser root\n")).unwrap();
+  fs::write(dir.join("mosquitto.conf"), format!("listener {port} 127.0.0.1\nallow_anonymous true\nuser root\n"))
+    .unwrap();
   let _broker = Killed(
     Command::new("mosquitto")
       .arg("-c")

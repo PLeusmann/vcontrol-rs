@@ -2,9 +2,9 @@
 
 use std::{
   fs,
-  sync::atomic::{AtomicU16, Ordering},
   path::PathBuf,
   process::{Child, Command, Stdio},
+  sync::atomic::{AtomicU16, Ordering},
 };
 
 use tokio::net::TcpStream;
@@ -34,7 +34,11 @@ impl Broker {
     let dir = std::env::temp_dir().join(format!("vcontrol-mqtt-test-{port}"));
     fs::create_dir_all(&dir).unwrap();
     let settings = settings.replace("{dir}", dir.to_str().unwrap());
-    fs::write(dir.join("mosquitto.conf"), format!("listener {port} 127.0.0.1\nuser root\nlog_dest file {}/log\n{settings}\n", dir.display())).unwrap();
+    fs::write(
+      dir.join("mosquitto.conf"),
+      format!("listener {port} 127.0.0.1\nuser root\nlog_dest file {}/log\n{settings}\n", dir.display()),
+    )
+    .unwrap();
 
     Self { child: None, port, dir }
   }

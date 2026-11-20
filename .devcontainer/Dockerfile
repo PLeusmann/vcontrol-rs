@@ -6,6 +6,9 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 
 RUN rustup target add armv7-unknown-linux-musleabihf arm-unknown-linux-musleabihf
 
+# rustfmt.toml uses nightly-only options: format with `cargo +nightly fmt`.
+RUN rustup toolchain install nightly --profile minimal --component rustfmt
+
 # Debian ships no musl cross gcc; the glibc one works for `ring` and as the linker driver.
 ENV CC_armv7_unknown_linux_musleabihf=arm-linux-gnueabihf-gcc \
     CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_LINKER=arm-linux-gnueabihf-gcc
