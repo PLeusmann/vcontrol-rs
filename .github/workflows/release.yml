@@ -1,0 +1,46 @@
+# v* tags publish a release; the rolling dev tag (`just publish-dev`) replaces the dev pre-release.
+on:
+  push:
+    tags: ['v*', 'dev']
+
+name: Release
+
+permissions:
+  contents: write
+
+jobs:
+  deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same toolchain as `just dist`.
+      - run: docker build -t vcontrol-dev .devcontainer
+
+      # Both packages are named vcontrol-rs_<version>-1_armhf.deb, so the assets are named after `uname -m` on the Pi.
+      - run: docker run --rm -u root -v "$PWD":/work -w /work -e SCRIPT -e GITHUB_REF_NAME -e GITHUB_RUN_NUMBER -e GITHUB_SHA vcontrol-dev sh -euc "$SCRIPT"
+        env:
+          SCRIPT: |
+            version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+            if [ "$GITHUB_REF_NAME" = dev ]; then
+              # ~ sorts below the release, so apt upgrades from a dev build to the real 0.x.y-1.
+              set -- --deb-version "$version~dev.$GITHUB_RUN_NUMBER+g$(echo "$GITHUB_SHA" | cut -c1-7)-1"
+            else
+              test "v$version" = "$GITHUB_REF_NAME"
+              set --
+            fi
+            mkdir -p release
+            cargo deb "$@" --target armv7-unknown-linux-musleabihf --output release/vcontrol-rs_armv7l.deb
+            cargo deb "$@" --target arm-unknown-linux-musleabihf --output release/vcontrol-rs_armv6l.deb
+
+      - if: github.ref_name != 'dev'
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes release/*.deb
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - if: github.ref_name == 'dev'
+        run: |
+          gh release delete dev --yes || true
+          gh release create dev --prerelease --title "Development build ${GITHUB_SHA::7}" --notes "Built from $GITHUB_SHA." release/*.deb
+        env:
+          GH_TOKEN: ${{ github.token }}

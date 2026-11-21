@@ -1,0 +1,24 @@
+#!/bin/sh
+set -e
+
+#DEBHELPER#
+
+# $2 is the previously installed version; it is empty on a first install only.
+if [ "$1" = configure ] && [ -z "$2" ]; then
+  cat <<'EOF'
+
+vcontrol-mqtt is installed, but not enabled. To finish the setup:
+
+  1. Edit /etc/vcontrol/vcontrol-mqtt.toml: [optolink] device, and [mqtt] host,
+     username, tls. The commands listed are for a Vitotronic 200 KO2B.
+  2. Store the broker password, readable by root only:
+       echo 'VCONTROL_MQTT_PASSWORD=...' | sudo install -m 600 /dev/stdin /etc/vcontrol/vcontrol-mqtt.env
+  3. Try it by hand; writes are only logged, never sent to the controller:
+       sudo vcontrol-mqtt --config /etc/vcontrol/vcontrol-mqtt.toml --read-only
+  4. Enable and start the service:
+       sudo systemctl enable --now vcontrol-mqtt
+
+Guide: /usr/share/doc/vcontrol-rs/vcontrol-mqtt.md
+
+EOF
+fi
