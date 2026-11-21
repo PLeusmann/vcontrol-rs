@@ -482,10 +482,13 @@ mod tests {
     task: JoinHandle<Exit>,
   }
 
+  // The fake event loop yields what rumqttc's EventLoop::poll returns, large error included.
+  #[allow(clippy::result_large_err)]
   fn connack() -> Result<Event, ConnectionError> {
     Ok(Event::Incoming(Packet::ConnAck(ConnAck { session_present: false, code: ConnectReturnCode::Success })))
   }
 
+  #[allow(clippy::result_large_err)]
   fn message(topic: &str, payload: &str) -> Result<Event, ConnectionError> {
     Ok(Event::Incoming(Packet::Publish(Publish::new(topic, QoS::AtLeastOnce, payload))))
   }
