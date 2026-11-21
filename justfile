@@ -35,3 +35,13 @@ clippy: container
 # Build the .deb for each target into target/dist/<target>/.
 dist *targets=pi_targets: container
     for t in {{targets}}; do {{exec}} cargo deb --target "$t" --output "target/dist/$t/" || exit 1; done
+
+# Publish HEAD as the dev pre-release on GitHub: force-moves the dev tag on the branch's remote, CI builds and attaches the .debs.
+publish-dev:
+    #!/bin/sh
+    set -eu
+    git diff --quiet HEAD || { echo "uncommitted changes would not be in the build; commit them first" >&2; exit 1; }
+    remote=$(git config "branch.$(git branch --show-current).remote" || echo origin)
+    git tag -f dev
+    git push -f "$remote" refs/tags/dev
+    echo "Building $(git rev-parse --short HEAD) in GitHub Actions; the dev release follows in a few minutes."

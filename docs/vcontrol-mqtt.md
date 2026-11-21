@@ -21,6 +21,8 @@ curl -fsSLO https://github.com/PLeusmann/vcontrol-rs/releases/latest/download/vc
 sudo apt install ./vcontrol-rs_$(uname -m).deb
 ```
 
+`just publish-dev` publishes the current commit as the `dev` pre-release instead: download from `releases/download/dev/` in place of `releases/latest/download/`. Its version, such as `0.7.0~dev.12+g04bfce0-1`, sorts below `0.7.0-1`, so the next release upgrades it.
+
 Or build the Debian package in this repository. You need `docker` and `just`; the build runs in the devcontainer, which `just` creates:
 
 ```sh

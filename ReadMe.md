@@ -27,6 +27,7 @@ The `justfile` runs everything in the devcontainer, which it builds and starts i
 |---|---|
 | `just build` / `just test` / `just clippy` | `cargo build` / `test` / `clippy` with `--features mqtt`. The tests start `mosquitto`. |
 | `just dist [target...]` | the Debian packages for a Raspberry Pi with a 32-bit OS, in `target/dist/<target>/`: `armv7-unknown-linux-musleabihf` (Pi 2 and later) and `arm-unknown-linux-musleabihf` (Pi 1, Zero) |
+| `just publish-dev` | moves the `dev` tag to HEAD and pushes it; GitHub Actions publishes the packages as the `dev` pre-release |
 
 ### Install on the Pi
 
