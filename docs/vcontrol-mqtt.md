@@ -18,8 +18,10 @@ Each `v*` tag publishes the Debian packages on the [releases page](https://githu
 
 ```sh
 curl -fsSLO https://github.com/PLeusmann/vcontrol-rs/releases/latest/download/vcontrol-rs_$(uname -m).deb
-sudo apt install ./vcontrol-rs_$(uname -m).deb
+sudo apt install -o Dpkg::Options::=--force-confold ./vcontrol-rs_$(uname -m).deb
 ```
+
+`--force-confold` keeps an edited `/etc/vcontrol/vcontrol-mqtt.toml` on upgrades without asking; the new default lands beside it as `vcontrol-mqtt.toml.dpkg-dist`. To see what differs, by setting and command and without comments, run from this repository: `ssh <pi> python3 - < scripts/config-diff.py`.
 
 `just publish-dev` publishes the current commit as the `dev` pre-release instead: download from `releases/download/dev/` in place of `releases/latest/download/`. Its version, such as `0.7.0~dev.12+g04bfce0-1`, sorts below `0.7.0-1`, so the next release upgrades it.
 
@@ -40,7 +42,7 @@ This builds one package per Raspberry Pi target, for a 32-bit OS. Pick the one t
 
 ```sh
 scp target/dist/armv7-unknown-linux-musleabihf/vcontrol-rs_*.deb pi@raspberrypi:/tmp/
-ssh pi@raspberrypi sudo dpkg -i /tmp/vcontrol-rs_*.deb
+ssh pi@raspberrypi sudo dpkg -i --force-confold /tmp/vcontrol-rs_*.deb
 ```
 
 The package installs:
