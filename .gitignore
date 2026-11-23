@@ -6,3 +6,4 @@ build/*.json
 codegen/data
 codegen/vitosoft.exe
 scan-cache.yml
+.env
