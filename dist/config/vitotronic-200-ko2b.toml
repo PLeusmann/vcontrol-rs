@@ -1,0 +1,266 @@
+# vcontrol-mqtt for the Vitotronic 200 KO2B (V200KO2B), heating circuit 1 only.
+# Installed as /etc/vcontrol/vcontrol-mqtt.toml; your edits survive package upgrades.
+# Set up [mqtt] below; the broker password goes into /etc/vcontrol/vcontrol-mqtt.env (VCONTROL_MQTT_PASSWORD=...).
+# Command names are those of `vcontrol cat`; on another controller model, replace the commands below.
+# Left out: coding addresses (Kxx, set by the installer), static ids, and the complex types the bridge
+# cannot poll (Störungsspeicher, device_id).
+# Options shown commented out are optional; their value is the default unless noted.
+
+poll_interval = 60             # seconds, for every command without its own `interval`
+
+# Read-only: nothing is subscribed on `/set`, Home Assistant shows sensors only.
+writable = []
+
+# Prepared write channels: the settings a user changes at the controller. All are polled below and pass
+# the bridge's write checks. To enable, replace the line above; start with one entry and --read-only
+# (docs/vcontrol-mqtt-real-device-test.md, parts 4 and 5).
+# writable = [
+#   "Bedien_WW_Solltemperatur",             # Trinkwassertemperatur-Sollwert, 10..95 °C
+#   "BedienRTSolltemperaturA1M1",           # Raumtemperatur Soll, 3..37 °C
+#   "BedienRTSolltemperaturReduziertA1M1",  # Red. Raumtemp. Soll, 3..37 °C
+#   "BedienRTSoll_PartyA1M1",               # Party-Raumtemperatur Soll, 4..37 °C
+#   "BedienteilBA_GWGA1",                   # Betriebsprogramm
+#   "NRx_PartybetriebA1M1_D",               # Partybetrieb
+#   "NRx_SparbetriebA1M1_D",                # Sparbetrieb
+#   "KD3_KonfiNeigungA1",                   # Neigung Heizkennlinie, 0.2..3.5
+#   "KD4_KonfiNiveauA1",                    # Niveau Heizkennlinie, -13..40 K
+# ]
+# Top-level keys must come before the first table.
+
+[optolink]
+device = "/dev/ttyUSB0"
+# Instead of `device`, a TCP connection (e.g. ser2net):
+# host = "localhost"
+# port = 3002                  # required with `host`, no default
+
+[mqtt]
+host = "localhost"             # required
+# port = 1883
+# client_id = "vcontrol"       # also used in discovery ids, so must be unique per controller
+# username = "vcontrol"        # no default; anonymous without it
+# password = "..."             # better: VCONTROL_MQTT_PASSWORD in /etc/vcontrol/vcontrol-mqtt.env, which overrides this
+# tls = false
+# ca_file = "/etc/vcontrol/ca.pem"   # required when tls = true
+# topic_prefix = "vcontrol"
+
+# [homeassistant]                      # optional table; with it, discovery_prefix is required
+# discovery_prefix = "homeassistant"   # must differ from mqtt.topic_prefix
+
+# Polled commands. Each [[command]] takes:
+# name = "..."                 # required
+# display_name = "..."         # the entity name in Home Assistant; default: name
+# interval = 300               # seconds, 1..31536000; default: poll_interval
+
+# --- Temperatures ---
+
+[[command]]
+name = "ADC_IstTemperaturwert_ATS"
+display_name = "Außentemperatur"
+
+[[command]]
+name = "TiefpassTemperaturwert_ATS"
+display_name = "Außentemperatur gedämpft"
+
+[[command]]
+name = "Gemischte_AT"
+display_name = "Gemischte Außentemperatur"
+
+[[command]]
+name = "ADC_Isttemperaturwert_KTS"
+display_name = "Kesselwassertemperatur"
+
+[[command]]
+name = "TiefpassTemperaturwert_KTS"
+display_name = "Kesselwassertemperatur gedämpft"
+
+[[command]]
+name = "ADC_Isttemperaturwert_2"
+display_name = "Fühler 2 (Kessel-/Anlagenvorlauf)"
+
+[[command]]
+name = "VorlauftemperaturM1"
+display_name = "Vorlauftemperatur"
+
+[[command]]
+name = "ADC_IstTemperaturwert_STS1"
+display_name = "Trinkwassertemperatur"
+
+[[command]]
+name = "TiefpassTemperaturwert_STS1"
+display_name = "Trinkwassertemperatur gedämpft"
+
+# --- Setpoints and mode ---
+
+[[command]]
+name = "VT_SolltemperaturA1M1"
+display_name = "Vorlauftemperatur-Sollwert"
+
+[[command]]
+name = "VT_SollKesselA1M1_NR1"
+display_name = "Kesselwassertemperatur-Sollwert"
+
+[[command]]
+name = "HK_RaumsolltemperaturaktuellA1M1"
+display_name = "Raumtemperatur-Sollwert aktuell"
+
+[[command]]
+name = "WW_SolltemperaturAktuell"
+display_name = "Trinkwassertemperatur-Sollwert aktuell"
+
+[[command]]
+name = "HK_AktuelleBetriebsartA1M1"
+display_name = "Betriebsart"
+
+[[command]]
+name = "WW_Status_NR2"
+display_name = "Status Warmwasserbereitung"
+
+[[command]]
+name = "Bedien_WW_Solltemperatur"
+display_name = "Trinkwassertemperatur-Sollwert"
+interval = 300
+
+[[command]]
+name = "BedienRTSolltemperaturA1M1"
+display_name = "Raumtemperatur Soll"
+interval = 300
+
+[[command]]
+name = "BedienRTSolltemperaturReduziertA1M1"
+display_name = "Reduzierte Raumtemperatur Soll"
+interval = 300
+
+[[command]]
+name = "BedienRTSoll_PartyA1M1"
+display_name = "Party-Raumtemperatur Soll"
+interval = 300
+
+[[command]]
+name = "BedienteilBA_GWGA1"
+display_name = "Betriebsprogramm"
+interval = 300
+
+[[command]]
+name = "NRx_PartybetriebA1M1_D"
+display_name = "Partybetrieb"
+interval = 300
+
+[[command]]
+name = "NRx_SparbetriebA1M1_D"
+display_name = "Sparbetrieb"
+interval = 300
+
+[[command]]
+name = "HK_FerienbetriebA1M1"
+display_name = "Ferienbetrieb aktiv"
+interval = 300
+
+[[command]]
+name = "KD3_KonfiNeigungA1"
+display_name = "Neigung Heizkennlinie"
+interval = 3600
+
+[[command]]
+name = "KD4_KonfiNiveauA1"
+display_name = "Niveau Heizkennlinie"
+interval = 3600
+
+# --- Burner, pumps ---
+
+[[command]]
+name = "DigitalAusgang_Brenner"
+display_name = "Brenner"
+
+[[command]]
+name = "HK_PumpenzustandA1M1"
+display_name = "Heizkreispumpe"
+
+[[command]]
+name = "DigitalAusgang_Speicherladepumpe"
+display_name = "Speicherladepumpe"
+
+[[command]]
+name = "DigitalAusgang_Zirkulationspumpe"
+display_name = "Zirkulationspumpe"
+
+# --- Oil usage ---
+# Oil used ≈ burner hours × burner consumption; DigitalAusgang_Brenner above gives the run times.
+
+[[command]]
+name = "Oelverbrauch"
+display_name = "Brennstoffverbrauch"  # l, counter uncalibrated, see K26 below
+interval = 300
+
+[[command]]
+name = "BetriebsstundenBrenner1"
+display_name = "Brennerbetriebsstunden"
+interval = 300
+
+[[command]]
+name = "Brennerstarts"
+interval = 300
+
+[[command]]
+name = "K26_KonfiVerbrauchBrenner1GWG"
+display_name = "Brennstoffverbrauch Brenner"  # coding address 26, the factor behind Oelverbrauch
+interval = 86400
+
+# --- Status, faults ---
+
+[[command]]
+name = "HK_Frostgefahr_aktivA1M1"
+display_name = "Frostgefahr"
+interval = 300
+
+[[command]]
+name = "TemperaturFehler_ATS"
+display_name = "Fühlerstatus Außentemperatur"
+interval = 300
+
+[[command]]
+name = "TemperaturFehler_STS1"
+display_name = "Fühlerstatus Speicher"
+interval = 300
+
+[[command]]
+name = "VorlauftemperaturstatusA1M1"
+display_name = "Fühlerstatus Vorlauf"
+interval = 300
+
+# --- Zeitprogramme, Ferienprogramm, Uhrzeit, Störungsmeldungen ---
+# Not yet in the prepared `writable` list: writing them waits for scripts/device-test-complex-types.sh.
+
+[[command]]
+name = "Schaltzeiten_A1M1_HK"
+display_name = "Zeitprogramm Heizkreis"
+interval = 3600
+
+[[command]]
+name = "Schaltzeiten_A1M1_WW"
+display_name = "Zeitprogramm Trinkwassererwärmung"
+interval = 3600
+
+[[command]]
+name = "Schaltzeiten_A1M1_ZP"
+display_name = "Zeitprogramm Zirkulationspumpe"
+interval = 3600
+
+[[command]]
+name = "Uhrzeit"
+interval = 3600
+
+[[command]]
+name = "ecnsysEventType~ErrorIndex"
+display_name = "Störungsmeldungen"
+
+# One entity from the start and end date. Each [[ferienprogramm]] takes:
+# id = "..."                   # required; used in topics, discovery ids and `writable` instead of a command name
+# display_name = "..."         # default: id
+# start = "...", end = "..."   # required: the two date commands
+# interval = 300               # default: poll_interval
+[[ferienprogramm]]
+id = "ferienprogramm_hk1"
+display_name = "Ferienprogramm"
+start = "FerienBeginnA1M1"
+end = "FerienEndeA1M1"
+interval = 3600

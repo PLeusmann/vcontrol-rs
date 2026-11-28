@@ -4,7 +4,7 @@ members = ["codegen"]
 [package]
 name = "vcontrol"
 description = "A library for communication with Viessmann heating controllers."
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 authors = ["Markus Reiter <me@reitermark.us>"]
 documentation = "https://docs.rs/vcontrol"
@@ -30,6 +30,7 @@ cli = [
   "tokio/io-util",
 ]
 schemars = ["dep:schemars"]
+mqtt = ["cli", "dep:rumqttc", "dep:rustls", "dep:toml", "tokio/signal"]
 
 [dependencies]
 clap = { version = "4.6", optional = true }
@@ -47,10 +48,22 @@ tokio-serial = "5.5.0"
 pin-project = "1.1.13"
 num_enum = "0.7.6"
 serialport = { version = "4.10.1", default-features = false }
+# Pinned. rustls must use the `ring` backend: `aws-lc-rs` is hard to cross-compile for armv7 musl.
+rumqttc = { version = "=0.25.1", default-features = false, features = ["use-rustls-no-provider"], optional = true }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
+toml = { version = "1", optional = true }
 
 [[bin]]
 name = "vcontrol"
 required-features = ["cli"]
+
+[[bin]]
+name = "vcontrol-mqtt"
+required-features = ["mqtt"]
+
+[[test]]
+name = "vcontrol_mqtt"
+required-features = ["mqtt"]
 
 [build-dependencies]
 chrono = "0.4"
@@ -62,4 +75,28 @@ anyhow = "1.0.104"
 
 [dev-dependencies]
 serde_json = "1"
-tokio = { version = "1.54", features = ["rt"] }
+# A pseudo-terminal for the Optolink lock test.
+libc = "0.2"
+tokio = { version = "1.54", features = ["rt", "test-util"] }
+flume = "0.11"
+
+# `just dist` builds this with cargo-deb for the Raspberry Pi targets.
+[package.metadata.deb]
+name = "vcontrol-rs"
+maintainer = "Philipp Leusmann <pl@leusmann.org>"
+extended-description = "vcontrol-mqtt bridges a Viessmann heating controller (Optolink) to an MQTT broker, with Home Assistant discovery. Includes the vcontrol CLI."
+section = "utils"
+features = ["mqtt"]
+# The binaries are statically linked (musl).
+depends = ""
+assets = [
+  ["target/release/vcontrol-mqtt", "usr/bin/", "755"],
+  ["target/release/vcontrol", "usr/bin/", "755"],
+  ["dist/config/vitotronic-200-ko2b.toml", "etc/vcontrol/vcontrol-mqtt.toml", "644"],
+  ["docs/vcontrol-mqtt.md", "usr/share/doc/vcontrol-rs/", "644"],
+  ["docs/vcontrol-mqtt-real-device-test.md", "usr/share/doc/vcontrol-rs/", "644"],
+]
+conf-files = ["/etc/vcontrol/vcontrol-mqtt.toml"]
+maintainer-scripts = "dist/debian/"
+# Installed but not enabled: the config needs editing first (see dist/debian/postinst). Upgrades restart it only if running.
+systemd-units = { unit-name = "vcontrol-mqtt", unit-scripts = "dist/systemd/", enable = false, start = false, restart-after-upgrade = true }

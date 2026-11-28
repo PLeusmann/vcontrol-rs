@@ -115,23 +115,19 @@ impl VControl {
     let command = self.command_by_name(command)?;
 
     self.renegotiate().await?;
-    match command.get(&mut self.optolink, self.protocol).await {
-      Ok(value) => {
-        let mapping = if let Value::Error(ref _error) = value {
-          Some(self.device.errors())
-        } else if let Some(ref mapping) = command.mapping {
-          Some(mapping)
-        } else {
-          None
-        };
+    // Stays false if this call is dropped half-way (e.g. by a timeout), so the next call renegotiates.
+    self.connected = false;
+    let value = command.get(&mut self.optolink, self.protocol).await?;
+    self.connected = true;
+    let mapping = if let Value::Error(ref _error) = value {
+      Some(self.device.errors())
+    } else if let Some(ref mapping) = command.mapping {
+      Some(mapping)
+    } else {
+      None
+    };
 
-        Ok(OutputValue { value, unit: command.unit, mapping })
-      },
-      Err(err) => {
-        self.connected = false;
-        Err(err)
-      },
-    }
+    Ok(OutputValue { value, unit: command.unit, mapping })
   }
 
   /// Sets the value for the given command.
@@ -141,12 +137,10 @@ impl VControl {
     let command = self.command_by_name(command)?;
 
     self.renegotiate().await?;
-    match command.set(&mut self.optolink, self.protocol, input).await {
-      Ok(()) => Ok(()),
-      Err(err) => {
-        self.connected = false;
-        Err(err)
-      },
-    }
+    // See `get`.
+    self.connected = false;
+    command.set(&mut self.optolink, self.protocol, input).await?;
+    self.connected = true;
+    Ok(())
   }
 }

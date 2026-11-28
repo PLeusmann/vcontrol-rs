@@ -26,7 +26,7 @@ fn dec_to_bcd(dec: u8) -> u8 {
   dec / 10 * 16 + dec % 10
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Date(pub(crate) NaiveDate);
 
 impl Date {
@@ -53,7 +53,8 @@ impl Date {
       dec_to_bcd((self.year() % 100) as u8),
       dec_to_bcd(self.month()),
       dec_to_bcd(self.day()),
-      self.weekday(),
+      // The controller counts weekdays 1 (Monday) to 7 (Sunday).
+      self.weekday() + 1,
       0,
       0,
       0,
@@ -219,7 +220,8 @@ impl DateTime {
       dec_to_bcd((self.year() % 100) as u8),
       dec_to_bcd(self.month()),
       dec_to_bcd(self.day()),
-      self.weekday(),
+      // The controller counts weekdays 1 (Monday) to 7 (Sunday).
+      self.weekday() + 1,
       dec_to_bcd(self.hour()),
       dec_to_bcd(self.minute()),
       dec_to_bcd(self.second()),
@@ -346,6 +348,16 @@ mod tests {
   fn to_bytes() {
     let time = DateTime::new(2018, 12, 23, 17, 49, 31).unwrap();
 
-    assert_eq!(time.to_bytes(), [0x20, 0x18, 0x12, 0x23, 0x06, 0x17, 0x49, 0x31]);
+    assert_eq!(time.to_bytes(), [0x20, 0x18, 0x12, 0x23, 0x07, 0x17, 0x49, 0x31]);
+  }
+
+  /// Byte 4 is the weekday as the controller counts it: `1970-01-01` (a Thursday) reads back with `04`.
+  #[test]
+  fn weekday_byte_is_1_for_monday_to_7_for_sunday() {
+    for (day, weekday) in [(16, 1), (19, 4), (22, 7)] {
+      assert_eq!(Date::new(2026, 11, day).unwrap().to_bytes()[4], weekday);
+      assert_eq!(DateTime::new(2026, 11, day, 13, 54, 39).unwrap().to_bytes()[4], weekday);
+    }
+    assert_eq!(Date::new(1970, 1, 1).unwrap().to_bytes(), [0x19, 0x70, 0x01, 0x01, 0x04, 0, 0, 0]);
   }
 }
